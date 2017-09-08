@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>OOCSS Example Page</title>
+    <link rel="stylesheet" href="aspect.css">
+    <link rel="stylesheet" href="embed.css">
+    <link rel="stylesheet" href="menu.css">
+    <link rel="stylesheet" href="panel.css">
+    <style>
+        body {
+            max-width: 40em;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .example,
+        .aspect,
+        .adaptable,
+        .aspect,
+        .aspect-4-3,
+        .embed,
+        .menu,
+        .menu-item,
+        .panel,
+        .panel-left,
+        .panel-right {
+            background-color: hsla(0,0%,50%, .3);
+        }
+    </style>
+</head>
+<body>
+    <h1>Example Page</h1>
+    
+    <h2 id="panel"><code>.panel</code></h2>
+    <p>Displays as <pre>"Hello                   World"</pre></p>
+    <div class="panel">
+        <p style="float: right">World</p>
+        <p>Hello</p>
+    </div>
+
+    <h3><code>.panel-left</code> and <code>.panel-right</code></h3>
+        
+    <p>Displays as "Hello World"</p>
+    <div class="example">
+        <div class="panel-left">Hello</div>
+        <div class="panel">World</div>
+    </div>
+    
+    <p>Displays as a media object (fixed-size image on left, with expandable content on right)</p>
+    <div class="panel">
+        <div class="panel-left">
+            <img src="http://gravatar.com/avatar/4cf4bc1b3618d2f73a2a290984a1129f?size=32">
+        </div>
+        <div class="panel">Andrew McAuley</div>
+    </div>
+
+    <h3 id="menu"><code>.menu</code></h3>
+
+    <p>Displays as "Link #1 Link #2"</p>
+    <ul class="menu">
+        <li class="menu-item">Link #1</li>
+        <li class="menu-item">Link #2</li>
+    </ul>
+
+    <h3><code>.menu-float</code></h3>
+    <p>Displays as "Link #1Link #2"</p>
+    <ul class="menu menu-float">
+        <li class="menu-item">Link #1</li>
+        <li class="menu-item">Link #2</li>
+    </ul>
+
+    <h3><code>.menu-vertical</code></h3>
+    <p>Displays as<br />
+<pre>"Link #1
+ Link #2"</pre></p>
+    <ul class="menu menu-vertical">
+        <li class="menu-item">Link #1</li>
+        <li class="menu-item">Link #2</li>
+    </ul>
+
+    <h3 id="aspect"><code>.aspect</code></h3>
+    <p>Displays a test youtube video in the "widescreen" 16:9 shape:</p>
+    <pre>0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0</pre>
+    <div class="aspect">
+        <video class=adaptable controls>
+            <!-- MP4 must be first for iPad! -->
+            <source src="http://clips.vorwaerts-gmbh.de/VfE_html5.mp4" type="video/mp4"  /><!-- Safari / iOS, IE9 -->
+            <source src="http://clips.vorwaerts-gmbh.de/VfE.webm"      type="video/webm" /><!-- Chrome10+, Ffx4+, Opera10.6+ -->
+            <source src="http://clips.vorwaerts-gmbh.de/VfE.ogv"       type="video/ogg"  /><!-- Firefox3.6+ / Opera 10.5+ -->
+        </video>
+    </div>
+
+    <h3><code>.aspect-4-3</code></h3>
+    <p>Displays a test youtube in the standard TV 4:3 shape:</p>
+    <pre>0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0</pre>
+    <div class="aspect aspect-4-3">
+        <video class=adaptable controls>
+            <!-- MP4 must be first for iPad! -->
+            <source src="http://clips.vorwaerts-gmbh.de/VfE_html5.mp4" type="video/mp4"  /><!-- Safari / iOS, IE9 -->
+            <source src="http://clips.vorwaerts-gmbh.de/VfE.webm"      type="video/webm" /><!-- Chrome10+, Ffx4+, Opera10.6+ -->
+            <source src="http://clips.vorwaerts-gmbh.de/VfE.ogv"       type="video/ogg"  /><!-- Firefox3.6+ / Opera 10.5+ -->
+        </video>
+    </div>
+
+    <h3 id=embed><code>.embed</code></h3>
+    <p>Expands a fixed width image to fill the available width</p>
+    <div class=example>
+        <img class="embed" src="http://gravatar.com/avatar/4cf4bc1b3618d2f73a2a290984a1129f?size=32">
+    </div>
+
+</body>
+</html>
