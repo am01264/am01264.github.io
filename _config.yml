@@ -1,9 +1,8 @@
 title: Writings
-description: by Andrew McAuley
+description: Andrew McAuley
 author: Andrew McAuley
 theme: minima
 plugins:
  - jekyll-sitemap
 
 github_username: am01264
-facebook_username: am01264
