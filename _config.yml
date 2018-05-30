@@ -6,3 +6,4 @@ plugins:
  - jekyll-sitemap
 
 github_username: am01264
+show_excerpts: true
