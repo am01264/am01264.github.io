@@ -5,6 +5,8 @@ author: Andrew McAuley
 theme: minima
 plugins:
  - jekyll-sitemap
+ - jekyll-feed
 
 github_username: am01264
 show_excerpts: true
+
