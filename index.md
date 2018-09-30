@@ -2,8 +2,8 @@
 layout: home
 ---
 
-I can't say how much you'll enjoy these writings, nor can I say how much I'll enjoy adding to them. But I'm sure if we can both find some gems in these, we'll all be happy. I promise no quality, but I hope the ideas shine through.
+Welcome to The Lense.
 
-Feel free to peruse or dive in to those writings that catch your eye.
+The Lense is one mans attempt to get some clarity through the act of writing. You might notice Lens is mis-spelt, that's because this isn't meant to be polished, or perfect, simply just good enough.
 
-With warm regards, Andrew
+Whether it's any good for you is another matter... but even I find an occasional gem. I should mention, unlike some of my other writings, all posts here are safe for work. Feel free to read at your own pleasure, and if you enjoy something - feel free to share a quick blurb with friends.
