@@ -11,7 +11,10 @@ plugins:
  - jekyll-feed
 
 # Undocumented `broccolini/swiss` feature, may fail in future update
+# > For the moment, the theme will attempt to include `${social_link}.html`
 social_link: dot
+social_username: am01264
 
+github_username: am01264
 show_excerpts: true
 
