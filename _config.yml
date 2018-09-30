@@ -2,7 +2,10 @@ title: The Lense
 description: Clarifying the chaos of life through writing, and rambling.
 
 author: Andrew McAuley
-theme: minima
+
+# theme: minima
+remote_theme: broccolini/swiss
+
 plugins:
  - jekyll-sitemap
  - jekyll-feed
