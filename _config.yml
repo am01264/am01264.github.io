@@ -20,5 +20,12 @@ show_excerpts: true
 
 collections: 
   books:
-    layout: book
     output: true
+
+defaults:
+  -
+    scope:
+      path: ""
+      type: "books"
+    values:
+      layout: "book"
