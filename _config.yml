@@ -18,3 +18,7 @@ social_username: am01264
 github_username: am01264
 show_excerpts: true
 
+collections: 
+  books:
+    layout: book
+    output: true
