@@ -6,14 +6,21 @@ layout: post
 
 <link rel="stylesheet" href="/lib/oocss/panel.css">
 
+<style>
+    .book-cover { max-width: 33% }
+    .book-cover img { max-width: 100%; height: auto; }
+
+    .no-margin-lead { margin-top: 0 }
+</style>
+
 <div itemscope itemtype="https://schema.org/Book" class="panel">
 
-    <div class="panel-left">
-        <img class="book-cover" src="{{book.cover}}" />
+    <div class="panel-left book-cover">
+        <img class="embed" src="{{book.cover}}" />
     </div>
 
     <div class="panel">
-        {% if book.title %}<h2>{{book.title}}</h2>{% endif %}
+        {% if book.title %}<h2 class="no-margin-lead">{{book.title}}</h2>{% endif %}
         {% if book.subtitle %}<h3>{{book.subtitle}}</h3>{% endif %}
         <p>by <span>{{ book.author }}</span> ISBN {{book.isbn}}</p>
 
