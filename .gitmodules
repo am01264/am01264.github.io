@@ -1,3 +1,6 @@
 [submodule "_posts"]
 	path = _posts
 	url = https://github.com/am01264/writings.git
+[submodule "lib/oocss"]
+	path = lib/oocss
+	url = https://github.com/am01264/oocss.git

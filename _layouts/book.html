@@ -4,10 +4,20 @@ layout: post
 
 {% assign book = page %}
 
-<div itemscope itemtype="https://schema.org/Book">
-    {%- comment -%} Ignore the title as it is already rendered {%- endcomment -%}
-    {% if book.subtitle %}<h2>{{book.subtitle}}</h2>{% endif %}
-    <p>by <span>{{ book.author }}</span></p>
+<link rel="stylesheet" href="/lib/oocss/panel.css">
 
-    {{ book.content | markdownify }}
+<div itemscope itemtype="https://schema.org/Book" class="panel">
+
+    <div class="panel-left">
+        <img class="book-cover" src="{{book.cover}}" />
+    </div>
+
+    <div class="panel">
+        {% if book.title %}<h2>{{book.title}}</h2>{% endif %}
+        {% if book.subtitle %}<h3>{{book.subtitle}}</h3>{% endif %}
+        <p>by <span>{{ book.author }}</span> ISBN {{book.isbn}}</p>
+
+        {{ book.content | markdownify }}
+    </div>
+    
 </div>
