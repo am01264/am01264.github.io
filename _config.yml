@@ -21,6 +21,8 @@ show_excerpts: true
 collections: 
   books:
     output: true
+  lib:
+    output: false
 
 defaults:
   -
@@ -29,3 +31,9 @@ defaults:
       type: "books"
     values:
       layout: "book"
+  -
+    scope:
+      path: ""
+      type: "lib"
+    values:
+      output: false
