@@ -98,10 +98,13 @@ export function not<T>( parser : Parser<T> ) : Parser<string> {
                 value: source.substring(index, res.index + 1) 
             };
         } else {
+            const err = new SyntaxError("Token not allowed");
+            err.cause = res;
+
             return { 
                 source, 
                 index, 
-                error: new SyntaxError("Token not allowed") 
+                error: err
             };
         }
     }
@@ -150,9 +153,10 @@ export function anyOf( ...parsers : Parser<any>[]) : Parser<any> {
         }
 
         const err = new SyntaxError("No parser could match the content");
+        err.cause = results;
 
         return {
-            source, index, error: err, failures: results
+            source, index, error: err
         }
 
     }

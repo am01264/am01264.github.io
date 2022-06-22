@@ -7,6 +7,10 @@ export interface FrontMatterProperties {
     [ index : string ] : string | string[]
 }
 
+class ParserError extends Error {
+    friendlyMessage : string = '';
+}
+
 function stringify(parser : Parser<any>) : Parser<string> {
     return intercept(parser, result => {
         
@@ -111,11 +115,15 @@ export function parse( content : string, defaults : FrontMatterProperties = {} )
         
         if ('error' in result) {
             const lines = result.source.substring(0, result.index + 1).split('\n')
-            console.log(`Found issue on line ${lines.length}, column ${lines[lines.length - 1].length}:`)
+            const err = new ParserError(`Failed to parse front matter correctly
 
-            console.log(`> `+result.source.substring(result.index, result.index + 80).split('\n').join('\n> ') + '...')
-            console.log(`\nTechnical details: %o`, result.error);
-            console.log('\n\n')
+Found issue on line ${lines.length}, column ${lines[lines.length - 1].length}:
+    > ${result.source.substring(result.index, result.index + 80).split('\n').join('\n    > ') + '...'}
+`
+                , {cause: result.error}
+                );
+
+            return err;
         }
 
         return { meta: props, frontMatterLength: result.index };
