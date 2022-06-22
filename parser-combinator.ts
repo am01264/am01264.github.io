@@ -212,9 +212,9 @@ export function zeroOrMore( parser: Parser<any> ) : Parser<any> {
 
 export function sequence<T extends readonly any[]>( ...parsers : T ) : Parser<any> {
 
-    const results : ParserResult<T>[] = [];
-
     return (source : string, index : number) => {
+
+        const results : ParserResult<T>[] = [];
         
         for (let ix = 0; ix < parsers.length; ix++) {
             const parser = parsers[ix];
