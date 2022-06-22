@@ -31,34 +31,103 @@ export type Parser<T> = (source : string, index : number) => ParserResult<T>
 
 
 
-export function peek<T>( parser : Parser<T> ) {
+export function intercept<T>( parser : Parser<T>, cb : (result : ParserResult<T>) => void ) {
+
+    return (source : string, index : number) => {
+        const result = parser(source, index);
+        cb(result);
+        return result;
+    }
+
+
+}
+
+
+
+
+
+
+export function peek<T>( parser : Parser<T>, offset = 0 ) {
     return (source : string, index : number) => {
         // Push the index forward
-        const ixPeek = index + 1;
-        
-        // Get some
-        const result = parser(source, ixPeek);
-        
+        const result = parser(source, index + offset);
+
         // Rewind the index
         result.index = index;
         return result;
     }
 }
 
+Deno.test({
+    name: peek.name,
+    fn() {
+        const failure : Parser<any> = (source : string, index : number) => ({ source, index, error: new Error("Test only") });
+        const success : Parser<any> = (source : string, index : number) => ({ source, index: index + 1, value: null });
+
+        const test : Array<[Parser<any>,boolean,number]> = [
+            [failure, false, 0],
+            [success, true, 0]
+        ];
+
+        test.forEach(([parser, shouldPass, index], testNo) => {
+            const result = peek(parser)('', 0);
+            assert(result.index === index, `Index mismatch (${result.index} vs ${index} @ test # ${testNo})`);
+
+            if (shouldPass) assert(!isError(result), `Expected test pass (test # ${testNo})`)
+            else assert(isError(result), `Expected test fail (test # ${testNo})`)            
+        })
+
+    }
+})
 
 
 
 
 
-export function not<T>( parser : Parser<T> ) : Parser<true> {
+
+export function not<T>( parser : Parser<T> ) : Parser<string> {
     return (source : string, index : number) => {
         const res = parser(source, index);
 
-        if ('error' in res) return { source, index, value: true }
-        else return { source, index, error: new SyntaxError("Token not allowed") }
+        if ('error' in res) {
+            return { 
+                source, 
+                index : res.index + 1, 
+                value: source.substring(index, res.index + 1) 
+            };
+        } else {
+            return { 
+                source, 
+                index, 
+                error: new SyntaxError("Token not allowed") 
+            };
+        }
     }
 }
 
+
+Deno.test({
+    name: not.name,
+    fn() {
+        const failure : Parser<any> = (source : string, index : number) => ({ source, index, error: new Error("Test only") });
+        const success : Parser<any> = (source : string, index : number) => ({ source, index: index + 1, value: null });
+
+        const tests : Array<[Parser<any>, boolean, number]> = [
+            [ failure, true, 1 ],
+            [ success, false, 0 ]
+        ];
+
+        tests.forEach(([parser, shouldPass, index], testNo) => {
+            const result = not(parser)('', 0)
+
+            assert(result.index === index, `Index mismatch (${result.index} vs ${index} @ test # ${testNo})`);
+
+            if (shouldPass) assert(!isError(result), `Expected test pass (test # ${testNo})`)
+            else assert(isError(result), `Expected test fail (test # ${testNo})`)
+
+        })
+    }
+})
 
 
 
@@ -68,18 +137,55 @@ export function not<T>( parser : Parser<T> ) : Parser<true> {
 export function anyOf( ...parsers : Parser<any>[]) : Parser<any> {
 
     return (source : string, index : number) => {
+
+        const results = [];
+
         for (const parser of parsers) {
             const result = parser(source, index);
             
-            if ('value' in result) return result;
+            if (! ('error' in result)) return result;
+            else results.push(result);
         }
 
+        const err = new SyntaxError("No parser could match the content");
+
         return {
-            source, index, error: new SyntaxError("No parser could match the content")
+            source, index, error: err, failures: results
         }
+
     }
 
 }
+
+Deno.test({
+    name: anyOf.name,
+    fn() {
+
+        const failure : Parser<any> = (source : string, index : number) => ({ source, index, error: new Error("Test only") });
+        const success : Parser<any> = (source : string, index : number) => ({ source, index: index + 1, value: null });
+
+        const tests : Array<[Parser<any>[],boolean,number]> = [
+            [[success, success, success], true, 1],
+            [[failure, success, success], true, 1],
+            [[success, success, failure], true, 1],
+            [[success, failure, success], true, 1],
+            [[failure, failure, failure], false, 0],
+        ];
+
+        tests.forEach(([parsers, shouldPass, index], testNo) => {
+            const result = anyOf(...parsers)('', 0);
+
+            assert(result.index === index, `Index mismatch (${result.index} vs ${index} @ test # ${testNo})`);
+            
+            if (shouldPass) {
+                assert(! isError(result), `Expected passing test at index ${index} @ test # ${testNo}`)
+            } else {
+                assert(isError(result), `Expected failing test at index ${index} @ test # ${testNo}`)
+            }
+        })
+
+    }
+})
 
 
 
@@ -129,6 +235,36 @@ export function sequence<T extends readonly any[]>( ...parsers : T ) : Parser<an
     }
 
 }
+
+Deno.test({
+    name: sequence.name,
+    fn() {
+        const failure : Parser<any> = (source : string, index : number) => ({ source, index, error: new Error("Test only") });
+        const success : Parser<any> = (source : string, index : number) => ({ source, index: index + 1, value: null });
+
+        const tests = [
+            [[success, success, success], true, 3],
+            [[failure, success, success], false, 0],
+            [[success, success, failure], false, 2],
+            [[success, failure, success], false, 1],
+        ];
+
+        tests.forEach(([parsers, shouldPass, index], testNo) => {
+            
+            const result = sequence(...parsers)('', 0)
+            assert(result.index === index, `Index mismatch (${result.index} vs ${index} @ test # ${testNo})`);
+            
+            if (shouldPass) {
+                assert(! isError(result), `Expected passing test at index ${index} @ test # ${testNo}`)
+            } else {
+                assert(isError(result), `Expected failing test at index ${index} @ test # ${testNo}`)
+            }
+            
+
+        })
+
+    }
+})
 
 
 
@@ -227,9 +363,9 @@ export function token(token : string) : Parser<string> {
         let ixSeek = index;
         for (let ixToken = 0; ixToken < token.length; ixToken++, ixSeek++) {
             if (ixSeek >= source.length) {
-                return <ParserError>{ source, index: ixSeek, error: new SyntaxError("Expected token, got EOF") }
+                return <ParserError>{ source, index: ixSeek, error: new SyntaxError(`Expected ${token}, got EOF`) }
             } else if (source[ixSeek] !== token[ixToken]) {
-                return <ParserError>{ source, index: ixSeek, error: new SyntaxError("Expected token, got unrecognised character") }
+                return <ParserError>{ source, index: ixSeek, error: new SyntaxError(`Expected ${token}, got unrecognised character`) }
             }
         }
 
@@ -247,8 +383,10 @@ Deno.test({
         (<Array<[string, string, number, boolean]>><unknown>[
             ['-', '---', 0, true],
             ['=', '-=-', 1, true],
+            ['-=', '-=-', 0, true],
             ['-', ' ---', 0, false],
             [' ', '--- ', 0, false],
+            ['- ', '--- ', 0, false],
         ]) 
         .forEach(([prefix, source, index, shouldPass]) => {
 
@@ -470,43 +608,60 @@ Deno.test({
 
 
 
+export const newline = anyOf(
+    
+    // Windows style
+    token(ASCII.CARRIAGE_RETURN + ASCII.NEWLINE),
+    
+    // Mac style
+    token(ASCII.CARRIAGE_RETURN),
+    
+    // Unix style
+    token(ASCII.NEWLINE),
+);
 
 
-
-export function newline(source : string, index : number) {
-    if (source[index] === ASCII.NEWLINE) {
-        return {
-            value: source[index],
-            index: index + 1,
-            source
-        }
-    } else {
-        return {
-            error: new SyntaxError("Expected newline"),
-            index: index,
-            source
-        }
-    }
-}
+// export function newline(source : string, index : number) {
+//     if (source[index] === ASCII.CARRIAGE_RETURN)
+    
+    
+//     if (source[index] === ASCII.NEWLINE) {
+//         return {
+//             value: source[index],
+//             index: index + 1,
+//             source
+//         }
+//     } else {
+//         return {
+//             error: new SyntaxError("Expected newline"),
+//             index: index,
+//             source
+//         }
+//     }
+// }
 
 Deno.test({
-    name: newline.name,
+    name: 'newline',
     fn() {
         
         const tests : [string,number,boolean][] = 
         [
-            [ '\n', 0, true ],
+            [ '\r\n', 2, true ],
+            [ '\n', 1, true ],
+            [ '\r', 1, true ],
             [ '\t', 0, false ],
             [ 'ê', 0, false ]
         ];
 
-        tests.forEach(([char, index, shouldPass]) => {
-            const result = newline(char, index)
+        tests.forEach(([char, index, shouldPass], testNo) => {
+            const result = newline(char, 0)
+
+            assert(result.index === index, `Index mismatch, expected ${index}, got ${result.index} instead. (test ${testNo})`)
 
             if (shouldPass) {
-                assert(! isError(result), "Unexpected error")
+                assert(! isError(result), `Unexpected error (test ${testNo})`)
             } else {
-                assert(isError(result), "Expected an error to occur")
+                assert(isError(result), `Expected an error to occur (test ${testNo})`)
             }
 
         })
