@@ -33,8 +33,15 @@ export type Parser<T> = (source : string, index : number) => ParserResult<T>
 
 export function peek<T>( parser : Parser<T> ) {
     return (source : string, index : number) => {
+        // Push the index forward
         const ixPeek = index + 1;
-        return parser(source, ixPeek);
+        
+        // Get some
+        const result = parser(source, ixPeek);
+        
+        // Rewind the index
+        result.index = index;
+        return result;
     }
 }
 
@@ -79,17 +86,8 @@ export function anyOf( ...parsers : Parser<any>[]) : Parser<any> {
 
 
 
-export function optional<T>( parser : Parser<T> ) : Parser<T | undefined> {
-    return (source : string, index : number) => {
-        const result = parser(source, index);
-        if ('error' in result) {
-            return {
-                source, index, value: undefined
-            }
-        } else {
-            return result;
-        }
-    }
+export function optional<T>( parser : Parser<T> ) : Parser<T[]> {
+    return repeat(0, 1, parser);
 }
 
 
