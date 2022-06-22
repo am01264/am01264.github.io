@@ -31,12 +31,14 @@ export type Parser<T> = (source : string, index : number) => ParserResult<T>
 
 
 
-export function intercept<T>( parser : Parser<T>, cb : (result : ParserResult<T>) => void ) {
+export function intercept<T>( parser : Parser<T>, cb : (result : ParserResult<T>) => any ) {
 
     return (source : string, index : number) => {
         const result = parser(source, index);
-        cb(result);
-        return result;
+        const response = cb(result);
+
+        if (response) return response;
+        else return result;
     }
 
 
@@ -365,7 +367,7 @@ export function token(token : string) : Parser<string> {
             if (ixSeek >= source.length) {
                 return <ParserError>{ source, index: ixSeek, error: new SyntaxError(`Expected ${token}, got EOF`) }
             } else if (source[ixSeek] !== token[ixToken]) {
-                return <ParserError>{ source, index: ixSeek, error: new SyntaxError(`Expected ${token}, got unrecognised character`) }
+                return <ParserError>{ source, index: ixSeek, error: new SyntaxError(`Expected ${token}, got something else`) }
             }
         }
 

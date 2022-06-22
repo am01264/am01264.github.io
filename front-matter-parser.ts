@@ -1,52 +1,93 @@
 import {assert} from "https://deno.land/std@0.144.0/testing/asserts.ts"
-import {ASCII, alpha, numeric, anyOf, sequence, repeat, token, peek, not, newline, printable, whitespace, zeroOrMore, Parser, ParserResult, isError} from "./parser-combinator.ts"
+import {ASCII, optional, alpha, numeric, anyOf, sequence, repeat, token, peek, not, newline, printable, whitespace, zeroOrMore, Parser, ParserResult, intercept, isError} from "./parser-combinator.ts"
 
 const MAX_FRONT_MATTER_LENGTH = 1024;
 
+export interface FrontMatterProperties { 
+    [ index : string ] : string | string[]
+}
 
-async function run() {
-    const dirBase = "./_posts";
-
-    const files = [];
-
-    for await (const inode of Deno.readDir("./_posts")) {
-        if (! inode.isFile) continue;
-        if (! inode.name.endsWith('.md')) continue;
-        files.push(`${dirBase}/${inode.name}`);
-    }
-
-    for (const file of files) {
-
-        const content = await Deno.readTextFile(file);
+function stringify(parser : Parser<any>) : Parser<string> {
+    return intercept(parser, result => {
         
-        const alphanumeric = anyOf(alpha, numeric);
-        const identifier = sequence(alpha, repeat(0, 255, anyOf(alpha, numeric)))
-        const bool = anyOf(token("true"), token("false"));
+        if ('value' in result) {
+            result.value = reduceToString(result)
+        }
 
-        const line = repeat(0, Number.MAX_SAFE_INTEGER, sequence(
-            peek(not(newline)),
-            anyOf(printable, whitespace)
-        ))
+        return result;
+    });
+}
+
+export function parse( content : string, defaults : FrontMatterProperties = {} ) {
+
+        const props = {...defaults}
+
+        const alphanumeric = anyOf(alpha, numeric);
+        const identifier = stringify(sequence(alpha, repeat(0, 255, anyOf(alpha, numeric))));
+        const bool = stringify(anyOf(token("true"), token("false")));
+
+        const line = stringify(repeat(0, Number.MAX_SAFE_INTEGER, not(newline)));
 
         const indent = anyOf(token(ASCII.TAB), repeat(2, 4, token(ASCII.SPACE)));
 
-        const paragraph = sequence(
+        const paragraph = stringify(sequence(
             line,
-            zeroOrMore(sequence(newline, indent, line))
-        );
+            zeroOrMore(intercept(sequence(newline, indent, line), result => {
+                if ('error' in result) return;
+                const INDEX_INDENT = 1;
+                result.value[INDEX_INDENT] = '';
+                return result;
+            }))
+        ));
 
-        const list = zeroOrMore(sequence(newline, indent, token(ASCII.DASH), line))
+        const list = zeroOrMore(intercept(
+            sequence(
+                newline, 
+                indent, 
+                token(ASCII.DASH), 
+                sequence(peek(not(newline)), whitespace), 
+                line
+            ),
+            function collapseToListValue(result) {
+                if ('error' in result) return;
+
+                // Simplify the result to just the content
+                const INDEX_LINE = 4;
+                const value = result.value[INDEX_LINE].value;
+
+                result.value = value;
+                return result;
+            }
+        ));
 
         function property(name : Parser<any>, value : Parser<any>) : Parser<any> {
-            return sequence(
-                name, 
-                zeroOrMore(whitespace), 
-                token(ASCII.COLON), 
-                zeroOrMore(whitespace), 
-                value, 
-                peek(not(newline)), 
-                newline
+            return intercept(
+                sequence(
+                    name, 
+                    zeroOrMore(whitespace), 
+                    token(ASCII.COLON), 
+                    zeroOrMore(sequence(peek(not(newline)), whitespace)), 
+                    value, 
+                    zeroOrMore(sequence(peek(not(newline)), whitespace)),
+                    newline
+                ),
+                (result) => {
+
+                    if (! ('error' in result)) {
+
+                        // Record property values
+                        const INDEX_NAME = 0;
+                        const INDEX_VALUE = 4;
+
+                        const name =  result.value[INDEX_NAME].value;
+                        const value = reduceToValue(result.value[INDEX_VALUE]);
+
+                        props[name] = value;
+                    }
+                }
             );
+
+            
         }
 
         const knownProperties = anyOf(
@@ -55,21 +96,77 @@ async function run() {
             property(token("description"), paragraph),
             property(token("layout"), identifier),
             property(token("author"), line),
-            property(token("tags"), list)
+            property(token("tags"), list),
         );
+
+        const fence = sequence(token(ASCII.DASH+ASCII.DASH+ASCII.DASH), newline)
 
         const frontMatterParser = sequence(
-            fence,
-            zeroOrMore(knownProperties),
-            fence
+            fence, 
+            repeat(1, Number.MAX_SAFE_INTEGER, knownProperties),
+            fence, 
         );
 
-        console.dir(frontMatterParser(content, 0));
+        const result = frontMatterParser(content, 0);
+        
+        if ('error' in result) {
+            const lines = result.source.substring(0, result.index + 1).split('\n')
+            console.log(`Found issue on line ${lines.length}, column ${lines[lines.length - 1].length}:`)
 
-    }
+            console.log(`> `+result.source.substring(result.index, result.index + 80).split('\n').join('\n> ') + '...')
+            console.log(`\nTechnical details: %o`, result.error);
+            console.log('\n\n')
+        }
+
+        return { meta: props, frontMatterLength: result.index };
+        
 }
 
-// run()
+function reduceToValue(a : ParserResult<any>) {
+    if (typeof a !== "object") return a;
+    
+    if ('value' in a) {
+        if (Array.isArray(a.value)) {
+            a.value = a.value.map(b => reduceToValue(b.value))
+        } 
+        return a.value;
+    } 
+}
+
+function reduceToString(a : ParserResult<any>) : string{
+
+    if ('error' in a) return '';
+    if (typeof a?.value === "undefined") return '';
+    if (typeof a?.value === "string") return a.value;
+
+    if (Array.isArray(a.value)) {
+        return a.value.reduce(
+            (prev : string, curr : ParserResult<any>) => prev+reduceToString(curr)
+            , ''
+            )
+    }
+
+    return String(a.value);
+
+}
+
+Deno.test({
+    name: "Testing Peek Not",
+    fn() {
+
+        const tests : Array<[string, boolean, number]> = [
+            ["|", false, 0],
+            [" ", true, 0]
+        ]
+        tests.forEach(([source, shouldPass, expectedIndex], testNo) => {
+            const result = peek(not(token("|")))(source, 0)
+            assert(expectedIndex === result.index, `${expectedIndex} != ${result.index}`)
+            
+            if (shouldPass) assert(! isError(result), `Expected pass (test #${testNo})`)
+            else assert(isError(result), `Expected error (test #${testNo})`)
+        })
+    }
+})
 
 function fence(source : string, index : number) : ParserResult<string> {
 
