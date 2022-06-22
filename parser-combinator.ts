@@ -623,25 +623,6 @@ export const newline = anyOf(
 );
 
 
-// export function newline(source : string, index : number) {
-//     if (source[index] === ASCII.CARRIAGE_RETURN)
-    
-    
-//     if (source[index] === ASCII.NEWLINE) {
-//         return {
-//             value: source[index],
-//             index: index + 1,
-//             source
-//         }
-//     } else {
-//         return {
-//             error: new SyntaxError("Expected newline"),
-//             index: index,
-//             source
-//         }
-//     }
-// }
-
 Deno.test({
     name: 'newline',
     fn() {
@@ -672,6 +653,23 @@ Deno.test({
 
 
 
+Deno.test({
+    name: "Testing Peek Not",
+    fn() {
+
+        const tests : Array<[string, boolean, number]> = [
+            ["|", false, 0],
+            [" ", true, 0]
+        ]
+        tests.forEach(([source, shouldPass, expectedIndex], testNo) => {
+            const result = peek(not(token("|")))(source, 0)
+            assert(expectedIndex === result.index, `${expectedIndex} != ${result.index}`)
+            
+            if (shouldPass) assert(! isError(result), `Expected pass (test #${testNo})`)
+            else assert(isError(result), `Expected error (test #${testNo})`)
+        })
+    }
+})
 
 
 
