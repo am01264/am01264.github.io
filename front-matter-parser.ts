@@ -126,7 +126,10 @@ Found issue on line ${lines.length}, column ${lines[lines.length - 1].length}:
             return err;
         }
 
-        return { meta: props, frontMatterLength: result.index };
+        return { 
+            meta: props, 
+            frontMatterLength: result.index + 1
+        };
         
 }
 
