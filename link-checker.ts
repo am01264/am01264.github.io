@@ -1,60 +1,7 @@
-import {not, stringify, token, sequence, zeroOrMore, oneOrMore, repeat, anyOf, whitespace, optional, Parser, ParserResult, intercept, visualiseError} from "./parser-combinator.ts"
+import {assert, assertEquals} from "https://deno.land/std@0.144.0/testing/asserts.ts"
 
-const ASTMark = Symbol()
+import {not, AdjustWalk, walkParseTree, peek, printable, token, sequence, zeroOrMore, oneOrMore, repeat, anyOf, whitespace, optional, Parser, ParserResult, intercept, visualiseSource} from "./parser-combinator.ts"
 
-enum NodeType {
-    LinkDestination,
-}
-
-enum ChildState {
-    HasChildren, NoChildren
-}
-
-type ASTNode = ParserResult<string> & {
-    [index : symbol]: {
-        type: NodeType
-    }
-}
-
-function markAST( nodeType : NodeType, parser : Parser<string>, childState : ChildState = ChildState.HasChildren) {
-    
-    if (childState === ChildState.NoChildren) {
-        // If there's no children, convert the inner parse tree with a simple string
-        parser = stringify(parser);
-    }
-
-    return intercept(parser, result => {
-        
-        (result as any)[ASTMark] = {
-            type: nodeType
-        }
-
-        return result;
-
-    })
-
-}
-
-function isASTNode<T>( thing : any ) : thing is ASTNode {
-    return (typeof thing === "object") && ASTMark in thing;
-}
-
-function walkAST<T>( node : ParserResult<T>, cb : ( astNode : ASTNode ) => void) {
-
-    if (typeof node !== "object") return;
-    if ('error' in node) return;
-
-    if (isASTNode<T>(node)) {
-        cb(node)
-    }
-
-    if ('value' in node && Array.isArray(node.value)) {
-        for (const childNode of node.value) {
-            walkAST(childNode, cb);
-        }
-    }
-
-}
 
 /**
  * This section is based on the CommonMark grammar. 
@@ -69,37 +16,146 @@ function walkAST<T>( node : ParserResult<T>, cb : ( astNode : ASTNode ) => void)
 const spaceOrTab = anyOf(token(" "), token("\t"));
 
 const linkText = sequence(
+    // |> [hello] <| (http://example.org)
     token("["),
     zeroOrMore(not(token("]"))),
     token("]")
 );
 
 const linkDestination = anyOf(
-    sequence(token("<"), markAST(NodeType.LinkDestination, zeroOrMore(not(token(">")))), token(">")),
-    markAST(NodeType.LinkDestination, oneOrMore(not(whitespace)))
+
+    // <https://example.org>
+    sequence(token("<"), zeroOrMore(not(token(">")))), token(">"),
+
+    // https://example.org
+    oneOrMore(anyOf(
+        token("\\("), token("\\)"),
+        sequence(
+            peek(not(anyOf(
+                whitespace, token("("), token(")")
+            ))), 
+            printable
+        )
+    ))
 );
 
-const linkTitle = sequence(
-    token('"'),
-    zeroOrMore(anyOf(
-        token('\"'),
-        not(token('"'))
-    )),
-    token('"')
+const linkTitle = anyOf(
+    // "hello"
+    sequence(
+        token('"'), 
+        zeroOrMore(anyOf(token('\\"'),not(token('"')))),
+        token('"')
+    ),
+    
+    // 'ooooo'
+    sequence(
+        token("'"), 
+        zeroOrMore(anyOf(token("\\'"),not(token("'")))), 
+        token("'")
+    ),
+    
+    // (wait, what?)
+    sequence(
+        token("("), 
+        zeroOrMore(anyOf(
+            token("\\("), 
+            token("\\)"), 
+            not(anyOf((token("(")), token(")"))
+        ))), 
+        token(")")
+    ),
 );
 
-const inlineLink = sequence(linkText, token("("), zeroOrMore(spaceOrTab), linkDestination, optional(sequence(oneOrMore(spaceOrTab), linkTitle)), zeroOrMore(spaceOrTab), token(")"));
+const inlineLink = sequence(
+    linkText, 
+    token("("), 
+    anyOf(
+        // [hello](/world)
+        sequence(
+            zeroOrMore(spaceOrTab), 
+            linkDestination,
+            zeroOrMore(spaceOrTab), 
+        ),
+
+        // [hello](/world "time to die")
+        sequence(
+            zeroOrMore(spaceOrTab), 
+            linkDestination,
+            oneOrMore(spaceOrTab), 
+            linkTitle,
+            zeroOrMore(spaceOrTab), 
+        ),
+
+        // [minions-go]("bello!")
+        sequence(
+            zeroOrMore(spaceOrTab), 
+            linkTitle,
+            zeroOrMore(spaceOrTab), 
+        )
+    ),
+    token(")"));
 
 const linkLabel = sequence(
     token("["),
     repeat(1, 999, (anyOf(
-        token("\]"),
+        token("\\]"),
         not(token("]"))
     ))),
     token("]")
 );
 
 const linkReferenceDefinition = sequence(linkLabel, token(":"), zeroOrMore(spaceOrTab), linkDestination, optional(sequence(oneOrMore(spaceOrTab), linkTitle)))
+
+const linkReferenceFull = sequence(linkLabel, linkLabel);
+const linkReferenceCollapsed = sequence(linkLabel, token("["), token("]"))
+const linkReferenceShortcut = linkLabel
+
+const link = anyOf(
+    inlineLink,
+    linkReferenceDefinition,
+    linkReferenceFull,
+    linkReferenceCollapsed,
+    linkReferenceShortcut
+);
+
+
+Deno.test({
+    name: 'Inline Link',
+    fn() {
+
+        const tests = [
+            [ '[test](url)', 'url' ],
+            [ '[test](url "title")', 'url' ],
+        ];
+
+        tests.forEach(([test, expect]) => {
+            
+            const result = inlineLink(test, 0);
+            
+            console.trace("Parse completed");
+
+            if ('error' in result) {
+                console.log(visualiseSource(result));
+                throw result.error;
+            }
+
+            walkParseTree(result, node => {
+                if (typeof node !== "object") return AdjustWalk.StopDescent;
+                
+                if ('error' in node) {
+                    console.log(visualiseSource(node));
+                    throw node.error;
+                }
+                
+                const actual = node.source.substring(node.indexStart, node.indexEnd);
+                assertEquals(actual, expect);
+                return AdjustWalk.Continue;
+            })
+
+        })
+
+    }
+})
 
 
 function parseLinksFromMarkdown( markdown : string ) {
@@ -138,13 +194,17 @@ console.group("parseLinksFromMarkdown")
             continue;
         };
 
-        walkAST(result, (node) => {
-            if ('error' in node) return;
-            if (node[ASTMark].type !== NodeType.LinkDestination) return;
+        walkParseTree(result, node => {
+            if (typeof node !== "object") return AdjustWalk.StopDescent;
+            if ('error' in node) return AdjustWalk.StopDescent;
             
-            const link = String(node.value);
-            console.info("Link found: %s", link)
-            links.push(link)
+            if (node.author === linkDestination) {
+                const url = node.source.substring(node.indexStart, node.indexEnd);
+                console.info("Link found: %s", url)
+                links.push(url);
+            }
+
+            return AdjustWalk.Continue;
         })
 
         ix = result.indexEnd;
