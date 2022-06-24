@@ -143,7 +143,7 @@ export function anyOf( ...parsers : Parser<any>[]) : Parser<any> {
 
     return (source : string, index : number) => {
 
-        const results = [];
+        const results : ParserError[] = [];
 
         for (const parser of parsers) {
             const result = parser(source, index);
@@ -152,8 +152,7 @@ export function anyOf( ...parsers : Parser<any>[]) : Parser<any> {
             else results.push(result);
         }
 
-        const err = new SyntaxError("No parser could match the content");
-        err.cause = results;
+        const err = new SyntaxError("No parser could match the content", {cause: results});
 
         return {
             source, index, error: err
@@ -210,6 +209,13 @@ export function zeroOrMore( parser: Parser<any> ) : Parser<any> {
     return repeat(0, Number.MAX_SAFE_INTEGER, parser);
 }
 
+
+
+
+
+export function oneOrMore( parser: Parser<any> ) : Parser<any> {
+    return repeat(1, Number.MAX_SAFE_INTEGER, parser);
+}
 
 
 
@@ -713,5 +719,52 @@ function reduceToString(a : ParserResult<any>) : string{
     }
 
     return String(a.value);
+
+}
+
+
+
+
+
+
+export function visualiseError( pe : ParserError ) {
+    
+    let ixLineStart = 0;
+    let ixLineEnd = 0;
+
+    // Search backwards for line ending
+    for (ixLineStart = pe.index; 
+        ixLineStart >= 0 && pe.source[ixLineStart] !== '\n';
+        ixLineStart--) 
+        {}
+
+    // Find next line ending
+    for (ixLineEnd = pe.index;
+        ixLineEnd < pe.source.length && pe.source[ixLineEnd] !== '\n';
+        ixLineEnd++)
+        {}
+    
+    const sourceLine = pe.source.substring(ixLineStart, ixLineEnd);
+    
+    // Render the pointy arrow and EOF indicator
+    const ixCaret = (pe.index - ixLineStart);
+    const szCaretLine = ''.padStart(ixCaret, " ") + "^";
+    
+    const eofLine = (ixLineEnd >= pe.source.length) ? ''.padStart(ixCaret, ' ') + '| EOF' : '';
+
+
+    // Find the line and column of the error
+    let nLine = 1;
+    let nColumn = 1 + (pe.index - ixLineStart);
+    
+    for (let ix = pe.index; ix >= 0; ix--) 
+    {
+        if (pe.source[ix] === '\n' || pe.source[ix] === '\r') nLine++;
+    }
+
+
+
+    // Bring it all together
+    return eofLine + '\n' + sourceLine + '\n' + szCaretLine + `(line ${nLine}, column ${nColumn}, index ${pe.index})`
 
 }
