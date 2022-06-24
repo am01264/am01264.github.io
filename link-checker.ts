@@ -131,7 +131,7 @@ console.group("parseLinksFromMarkdown")
             const cause = result.error?.cause;
             if (Array.isArray(cause)) {
                 cause.forEach(c => {
-                    const visual = visualiseError(c);
+                    const visual = visualiseSource(c);
                     console.log(visual);
                 });
             } 

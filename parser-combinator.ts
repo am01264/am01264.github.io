@@ -1,4 +1,4 @@
-import {assert} from "https://deno.land/std@0.144.0/testing/asserts.ts"
+import {assert, assertEquals} from "https://deno.land/std@0.144.0/testing/asserts.ts"
 
 export const ASCII = {
     VERTICAL_TAB : '\v',
@@ -727,30 +727,34 @@ function reduceToString(a : ParserResult<any>) : string{
 
 
 
-export function visualiseError( pe : ParserError ) {
+export function visualiseSource<T>( pe : ParserResult<T> ) {
     
     let ixLineStart = 0;
     let ixLineEnd = 0;
 
     // Search backwards for line ending
-    for (ixLineStart = pe.index; 
-        ixLineStart >= 0 && pe.source[ixLineStart] !== '\n';
-        ixLineStart--) 
-        {}
+    for (ixLineStart = pe.index; ixLineStart > 0; ixLineStart--) {
+            if (pe.source[ixLineStart] === '\n') {
+                ixLineStart++;
+                break;
+            }
+        }
 
     // Find next line ending
-    for (ixLineEnd = pe.index;
-        ixLineEnd < pe.source.length && pe.source[ixLineEnd] !== '\n';
-        ixLineEnd++)
-        {}
+    for (ixLineEnd = pe.index; ixLineEnd < pe.source.length; ixLineEnd++) {
+        if (pe.source[ixLineEnd] === '\n') {
+            break;
+        }
+    }
     
     const sourceLine = pe.source.substring(ixLineStart, ixLineEnd);
     
     // Render the pointy arrow and EOF indicator
     const ixCaret = (pe.index - ixLineStart);
-    const szCaretLine = ''.padStart(ixCaret, " ") + "^";
+    const szCaretLine = ''.padStart(ixCaret, "-") + "^";
     
-    const eofLine = (ixLineEnd >= pe.source.length) ? ''.padStart(ixCaret, ' ') + '| EOF' : '';
+    const ixEof = Math.min(ixLineEnd, pe.source.length) - ixLineStart;
+    const eofLine = (ixLineEnd >= pe.source.length) ? ''.padStart(ixEof, ' ') + '| EOF' : '';
 
 
     // Find the line and column of the error
@@ -759,12 +763,57 @@ export function visualiseError( pe : ParserError ) {
     
     for (let ix = pe.index; ix >= 0; ix--) 
     {
+        if ((ix - 1) >= 0 && pe.source[ix - 1] === '\r' && pe.source[ix] === '\n') {
+            // Skip this one to avoid double-counting CRLF line endings
+            continue;
+        }
+
         if (pe.source[ix] === '\n' || pe.source[ix] === '\r') nLine++;
     }
 
 
 
     // Bring it all together
-    return eofLine + '\n' + sourceLine + '\n' + szCaretLine + `(line ${nLine}, column ${nColumn}, index ${pe.index})`
+    return eofLine + '\n' + sourceLine + '\n' + szCaretLine + ` (line ${nLine}, column ${nColumn}, index ${pe.index})`
 
 }
+
+Deno.test({
+    name: visualiseSource.name,
+    fn() {
+
+        // Document sample
+        const sample = 
+String.raw`# Sample
+In-between sample line
+Document text goes here`;
+
+        assertEquals(
+            sample.split('\n').map(s => s.length),
+            [ 8, 22, 23 ],
+            // "Test sample does not match expected dimensions"
+        );
+
+const indexLine = "01234567890123456789 Index"
+const colLine = "12345678901234567890 Column"
+
+        // TODO Test various line endings
+        // // Simplify line endings
+        //     .replaceAll(/(\r\n|\r|\n)/g, '\n')
+        //     ;
+
+        const tests : Array<[number, string]> = [
+            [ 0, '\n# Sample\n^ (line 1, column 1, index 0)'],
+            [ 9 + 8, '\nIn-between sample line\n--------^ (line 2, column 9, index 17)'],
+            [ 9 + 23 + 0, '                       | EOF\nDocument text goes here\n^ (line 3, column 1, index 32)'],
+        ]
+
+        tests.forEach(([index, expect], testNo) => {
+            
+            const actual = visualiseSource({ error: new Error(), source: sample, index })
+            assertEquals(actual, expect)
+
+        })
+
+}
+})
