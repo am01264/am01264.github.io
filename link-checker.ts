@@ -125,7 +125,7 @@ console.group("parseLinksFromMarkdown")
 
         if ('error' in result) {
             // Just means we didn't parse a link this time
-            ix = result.index;
+            ix = result.indexEnd;
             console.warn(`Failed to parse link at ${ix}, %o.`, result.error)
 
             const cause = result.error?.cause;
@@ -147,7 +147,7 @@ console.group("parseLinksFromMarkdown")
             links.push(link)
         })
 
-        ix = result.index;
+        ix = result.indexEnd;
 
     }
 console.groupEnd();

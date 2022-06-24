@@ -1,6 +1,5 @@
 import {ASCII, alpha, numeric, anyOf, sequence, repeat, token, peek, not, newline, whitespace, zeroOrMore, Parser, ParserResult, intercept, stringify, visualiseSource} from "./parser-combinator.ts"
 
-const MAX_FRONT_MATTER_LENGTH = 1024;
 
 export interface FrontMatterProperties { 
     [ index : string ] : string | string[]
@@ -113,7 +112,7 @@ export function parse( content : string, defaults : FrontMatterProperties = {} )
 
         return { 
             meta: props, 
-            frontMatterLength: result.index + 1
+            frontMatterLength: result.indexEnd + 1
         };
         
 }

@@ -11,15 +11,17 @@ export const ASCII = {
     CARRIAGE_RETURN : '\r',
 }
 
-interface ParserError {
+interface ParserResultCommon {
     source: string;
-    index: number;
+    indexEnd: number;
+    indexStart: number;
+}
+
+interface ParserError extends ParserResultCommon {
     error: Error;
 }
 
-interface ParserSuccess<T> {
-    source: string;
-    index: number;
+interface ParserSuccess<T> extends ParserResultCommon {
     value: T;
 }
 
@@ -31,7 +33,7 @@ export type Parser<T> = (source : string, index : number) => ParserResult<T>
 
 
 
-export function intercept<T>( parser : Parser<T>, cb : (result : ParserResult<T>) => any ) {
+export function intercept<T>( parser : Parser<T>, cb : (result : ParserResult<T>) => any ) : Parser<T> {
 
     return (source : string, index : number) => {
         const result = parser(source, index);
@@ -49,13 +51,13 @@ export function intercept<T>( parser : Parser<T>, cb : (result : ParserResult<T>
 
 
 
-export function peek<T>( parser : Parser<T>, offset = 0 ) {
+export function peek<T>( parser : Parser<T>, offset = 0 ) : Parser<T> {
     return (source : string, index : number) => {
         // Push the index forward
         const result = parser(source, index + offset);
 
         // Rewind the index
-        result.index = index;
+        result.indexEnd = index;
         return result;
     }
 }
@@ -63,8 +65,8 @@ export function peek<T>( parser : Parser<T>, offset = 0 ) {
 Deno.test({
     name: peek.name,
     fn() {
-        const failure : Parser<any> = (source : string, index : number) => ({ source, index, error: new Error("Test only") });
-        const success : Parser<any> = (source : string, index : number) => ({ source, index: index + 1, value: null });
+        const failure : Parser<any> = (source : string, index : number) => ({ source, indexStart: index, indexEnd : index, error: new Error("Test only") });
+        const success : Parser<any> = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index + 1, value: null });
 
         const test : Array<[Parser<any>,boolean,number]> = [
             [failure, false, 0],
@@ -73,7 +75,7 @@ Deno.test({
 
         test.forEach(([parser, shouldPass, index], testNo) => {
             const result = peek(parser)('', 0);
-            assert(result.index === index, `Index mismatch (${result.index} vs ${index} @ test # ${testNo})`);
+            assert(result.indexEnd === index, `Index mismatch (${result.indexEnd} vs ${index} @ test # ${testNo})`);
 
             if (shouldPass) assert(!isError(result), `Expected test pass (test # ${testNo})`)
             else assert(isError(result), `Expected test fail (test # ${testNo})`)            
@@ -94,8 +96,9 @@ export function not<T>( parser : Parser<T> ) : Parser<string> {
         if ('error' in res) {
             return { 
                 source, 
-                index : res.index + 1, 
-                value: source.substring(index, res.index + 1) 
+                indexStart: index,
+                indexEnd : res.indexEnd + 1, 
+                value: source.substring(index, res.indexEnd + 1) 
             };
         } else {
             const err = new SyntaxError("Token not allowed");
@@ -103,7 +106,8 @@ export function not<T>( parser : Parser<T> ) : Parser<string> {
 
             return { 
                 source, 
-                index, 
+                indexStart: index,
+                indexEnd: index, 
                 error: err
             };
         }
@@ -114,8 +118,8 @@ export function not<T>( parser : Parser<T> ) : Parser<string> {
 Deno.test({
     name: not.name,
     fn() {
-        const failure : Parser<any> = (source : string, index : number) => ({ source, index, error: new Error("Test only") });
-        const success : Parser<any> = (source : string, index : number) => ({ source, index: index + 1, value: null });
+        const failure : Parser<any> = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index, error: new Error("Test only") });
+        const success : Parser<any> = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index + 1, value: null });
 
         const tests : Array<[Parser<any>, boolean, number]> = [
             [ failure, true, 1 ],
@@ -125,7 +129,7 @@ Deno.test({
         tests.forEach(([parser, shouldPass, index], testNo) => {
             const result = not(parser)('', 0)
 
-            assert(result.index === index, `Index mismatch (${result.index} vs ${index} @ test # ${testNo})`);
+            assert(result.indexEnd === index, `Index mismatch (${result.indexEnd} vs ${index} @ test # ${testNo})`);
 
             if (shouldPass) assert(!isError(result), `Expected test pass (test # ${testNo})`)
             else assert(isError(result), `Expected test fail (test # ${testNo})`)
@@ -155,7 +159,10 @@ export function anyOf( ...parsers : Parser<any>[]) : Parser<any> {
         const err = new SyntaxError("No parser could match the content", {cause: results});
 
         return {
-            source, index, error: err
+            source, 
+            indexStart: index,
+            indexEnd: index, 
+            error: err
         }
 
     }
@@ -166,8 +173,8 @@ Deno.test({
     name: anyOf.name,
     fn() {
 
-        const failure : Parser<any> = (source : string, index : number) => ({ source, index, error: new Error("Test only") });
-        const success : Parser<any> = (source : string, index : number) => ({ source, index: index + 1, value: null });
+        const failure : Parser<any> = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index, error: new Error("Test only") });
+        const success : Parser<any> = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index + 1, value: null });
 
         const tests : Array<[Parser<any>[],boolean,number]> = [
             [[success, success, success], true, 1],
@@ -180,7 +187,7 @@ Deno.test({
         tests.forEach(([parsers, shouldPass, index], testNo) => {
             const result = anyOf(...parsers)('', 0);
 
-            assert(result.index === index, `Index mismatch (${result.index} vs ${index} @ test # ${testNo})`);
+            assert(result.indexEnd === index, `Index mismatch (${result.indexEnd} vs ${index} @ test # ${testNo})`);
             
             if (shouldPass) {
                 assert(! isError(result), `Expected passing test at index ${index} @ test # ${testNo}`)
@@ -240,7 +247,8 @@ export function sequence<T extends readonly any[]>( ...parsers : T ) : Parser<an
 
         return {
             source,
-            index,
+            indexStart: index,
+            indexEnd: index,
             value: results
         }
 
@@ -251,8 +259,8 @@ export function sequence<T extends readonly any[]>( ...parsers : T ) : Parser<an
 Deno.test({
     name: sequence.name,
     fn() {
-        const failure : Parser<any> = (source : string, index : number) => ({ source, index, error: new Error("Test only") });
-        const success : Parser<any> = (source : string, index : number) => ({ source, index: index + 1, value: null });
+        const failure : Parser<any> = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index, error: new Error("Test only") });
+        const success : Parser<any> = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index + 1, value: null });
 
         const tests = [
             [[success, success, success], true, 3],
@@ -264,7 +272,7 @@ Deno.test({
         tests.forEach(([parsers, shouldPass, index], testNo) => {
             
             const result = sequence(...parsers)('', 0)
-            assert(result.index === index, `Index mismatch (${result.index} vs ${index} @ test # ${testNo})`);
+            assert(result.indexEnd === index, `Index mismatch (${result.indexEnd} vs ${index} @ test # ${testNo})`);
             
             if (shouldPass) {
                 assert(! isError(result), `Expected passing test at index ${index} @ test # ${testNo}`)
@@ -291,8 +299,9 @@ export function repeat<T>(minimum = 0, maximum = Number.MAX_SAFE_INTEGER, parser
         let count;
         const results : ParserSuccess<T>[] = [];
 
+        let currentIndex = index;
         for (count = 0; count < maximum; count++) {
-            const res = parser(source, index);
+            const res = parser(source, currentIndex);
 
             if ('error' in res && count < minimum) {
                 // Errored too early
@@ -305,14 +314,21 @@ export function repeat<T>(minimum = 0, maximum = Number.MAX_SAFE_INTEGER, parser
             } else {
                 // Found another one!
                 results.push(res);
-                index = res.index;
+                currentIndex = res.indexEnd;
+            }
+
+            if (currentIndex >= source.length) {
+                // Exit when we're past the end of the string
+                // Important: This is here to avoid infinite loops
+                break;
             }
 
         }
 
         return {
             source,
-            index,
+            indexStart: index,
+            indexEnd: currentIndex,
             value: results
         }
 
@@ -332,7 +348,7 @@ Deno.test({
         const result = repeat(0,1, (_, index) => {
             assert(currentIndex === index, `Index mismatch detected (${currentIndex} vs ${index})`)
             currentIndex += step;
-            return ({ source: '', index: currentIndex, value: undefined })
+            return ({ source: '', indexStart: index, indexEnd: currentIndex, value: undefined })
         })('hello world', currentIndex);
 
         assert(currentIndex === step, `Failed to step forward (${currentIndex} vs ${step})`);
@@ -352,7 +368,7 @@ Deno.test({
         const result3 = repeat(0,3, (_, index) => {
             assert(currentIndex === index, "Index mismatch detected")
             currentIndex += step;
-            return ({ source: '', index: currentIndex, value: undefined })
+            return ({ source: '', indexStart: index, indexEnd: currentIndex, value: undefined })
         })('hello world', 0);
 
         assert(currentIndex === (3 * step), "Failed to step forward");
@@ -375,13 +391,13 @@ export function token(token : string) : Parser<string> {
         let ixSeek = index;
         for (let ixToken = 0; ixToken < token.length; ixToken++, ixSeek++) {
             if (ixSeek >= source.length) {
-                return <ParserError>{ source, index: ixSeek, error: new SyntaxError(`Expected ${token}, got EOF`) }
+                return <ParserError>{ source, indexStart: index, indexEnd: ixSeek, error: new SyntaxError(`Expected ${token}, got EOF`) }
             } else if (source[ixSeek] !== token[ixToken]) {
-                return <ParserError>{ source, index: ixSeek, error: new SyntaxError(`Expected ${token}, got something else`) }
+                return <ParserError>{ source, indexStart: index, indexEnd: ixSeek, error: new SyntaxError(`Expected ${token}, got something else`) }
             }
         }
 
-        return <ParserSuccess<string>>{ source, index : ixSeek, value: source.substring(index, ixSeek) }
+        return <ParserSuccess<string>>{ source, indexStart: index, indexEnd : ixSeek, value: source.substring(index, ixSeek) }
 
     }
 
@@ -425,12 +441,18 @@ export function alpha(source : string, index : number) : ParserResult<string> {
     
     if (char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z') {
         return {
-            source, index: index+1, value: char
+            source, 
+            indexStart: index, 
+            indexEnd: index+1, 
+            value: char
         }
     
     } else {
         return {
-            source, index, error: new SyntaxError("Expected alphabetic character")
+            source, 
+            indexStart: index, 
+            indexEnd: index, 
+            error: new SyntaxError("Expected alphabetic character")
         }
     }
 }
@@ -471,17 +493,23 @@ Deno.test({
 
 
 
-export function numeric(source : string, index : number) {
+export function numeric(source : string, index : number) : ParserResult<string> {
     const char = source[index];
 
     if (char >= '0' && char <= '9') {
         return {
-            source, index: index + 1, value: char
+            source, 
+            indexStart: index, 
+            indexEnd: index + 1, 
+            value: char
         }
     
     } else {
         return {
-            source, index, error: new SyntaxError("Expected numeric character")
+            source, 
+            indexStart: index, 
+            indexEnd: index, 
+            error: new SyntaxError("Expected numeric character")
         }
     }
 }
@@ -522,14 +550,14 @@ Deno.test({
 
 
 
-export function printable(source : string, index: number) {
+export function printable(source : string, index: number) : ParserResult<string> {
     if ((source.codePointAt(index) || 0) >= 0x20 /* ASCII Printable Start */) {
         return {
-            source, index: index + 1, value: source[index]
+            source, indexStart: index, indexEnd: index + 1, value: source[index]
         }
     } else {
         return {
-            source, index, error: new SyntaxError("Expected printable character")
+            source, indexStart: index, indexEnd: index, error: new SyntaxError("Expected printable character")
         }
     }
 }
@@ -580,12 +608,18 @@ export function whitespace(source : string, index : number) : ParserResult<strin
         case ASCII.CARRIAGE_RETURN:
         case ASCII.SPACE:
             return {
-                source, index: index + 1, value: source[index]
+                source, 
+                indexStart: index, 
+                indexEnd: index + 1, 
+                value: source[index]
             };
 
         default:
             return {
-                source, index, error: new SyntaxError("Expected whitespace")
+                source, 
+                indexStart: index, 
+                indexEnd : index, 
+                error: new SyntaxError("Expected whitespace")
             }
     
     }
@@ -649,7 +683,7 @@ Deno.test({
         tests.forEach(([char, index, shouldPass], testNo) => {
             const result = newline(char, 0)
 
-            assert(result.index === index, `Index mismatch, expected ${index}, got ${result.index} instead. (test ${testNo})`)
+            assert(result.indexEnd === index, `Index mismatch, expected ${index}, got ${result.indexEnd} instead. (test ${testNo})`)
 
             if (shouldPass) {
                 assert(! isError(result), `Unexpected error (test ${testNo})`)
@@ -673,7 +707,7 @@ Deno.test({
         ]
         tests.forEach(([source, shouldPass, expectedIndex], testNo) => {
             const result = peek(not(token("|")))(source, 0)
-            assert(expectedIndex === result.index, `${expectedIndex} != ${result.index}`)
+            assert(expectedIndex === result.indexEnd, `${expectedIndex} != ${result.indexEnd}`)
             
             if (shouldPass) assert(! isError(result), `Expected pass (test #${testNo})`)
             else assert(isError(result), `Expected error (test #${testNo})`)
@@ -727,13 +761,13 @@ function reduceToString(a : ParserResult<any>) : string{
 
 
 
-export function visualiseSource<T>( pe : ParserResult<T> ) {
+export function visualiseSource<T>( pe : ParserResult<T> ) : string {
     
     let ixLineStart = 0;
     let ixLineEnd = 0;
 
     // Search backwards for line ending
-    for (ixLineStart = pe.index; ixLineStart > 0; ixLineStart--) {
+    for (ixLineStart = pe.indexEnd; ixLineStart > 0; ixLineStart--) {
             if (pe.source[ixLineStart] === '\n') {
                 ixLineStart++;
                 break;
@@ -741,7 +775,7 @@ export function visualiseSource<T>( pe : ParserResult<T> ) {
         }
 
     // Find next line ending
-    for (ixLineEnd = pe.index; ixLineEnd < pe.source.length; ixLineEnd++) {
+    for (ixLineEnd = pe.indexEnd; ixLineEnd < pe.source.length; ixLineEnd++) {
         if (pe.source[ixLineEnd] === '\n') {
             break;
         }
@@ -750,7 +784,7 @@ export function visualiseSource<T>( pe : ParserResult<T> ) {
     const sourceLine = pe.source.substring(ixLineStart, ixLineEnd);
     
     // Render the pointy arrow and EOF indicator
-    const ixCaret = (pe.index - ixLineStart);
+    const ixCaret = (pe.indexEnd - ixLineStart);
     const szCaretLine = ''.padStart(ixCaret, "-") + "^";
     
     const ixEof = Math.min(ixLineEnd, pe.source.length) - ixLineStart;
@@ -759,9 +793,9 @@ export function visualiseSource<T>( pe : ParserResult<T> ) {
 
     // Find the line and column of the error
     let nLine = 1;
-    let nColumn = 1 + (pe.index - ixLineStart);
+    let nColumn = 1 + (pe.indexEnd - ixLineStart);
     
-    for (let ix = pe.index; ix >= 0; ix--) 
+    for (let ix = pe.indexEnd; ix >= 0; ix--) 
     {
         if ((ix - 1) >= 0 && pe.source[ix - 1] === '\r' && pe.source[ix] === '\n') {
             // Skip this one to avoid double-counting CRLF line endings
@@ -774,7 +808,7 @@ export function visualiseSource<T>( pe : ParserResult<T> ) {
 
 
     // Bring it all together
-    return eofLine + '\n' + sourceLine + '\n' + szCaretLine + ` (line ${nLine}, column ${nColumn}, index ${pe.index})`
+    return eofLine + '\n' + sourceLine + '\n' + szCaretLine + ` (line ${nLine}, column ${nColumn}, index ${pe.indexEnd})`
 
 }
 
@@ -810,10 +844,25 @@ const colLine = "12345678901234567890 Column"
 
         tests.forEach(([index, expect], testNo) => {
             
-            const actual = visualiseSource({ error: new Error(), source: sample, index })
+            const actual = visualiseSource({ error: new Error(), source: sample, indexStart: index, indexEnd: index })
             assertEquals(actual, expect)
 
         })
 
-}
+    }
 })
+
+
+
+
+function eof<T>(source : string, index : number ) : ParserResult<boolean> {
+    if (index >= source.length) {
+        return {
+            source, indexStart: index, indexEnd: index, value: true
+        }
+    } else {
+        return {
+            source, indexStart: index, indexEnd: index, error: new Error('Not end of file')
+        }
+    }
+}
