@@ -769,7 +769,7 @@ function reduceToString(a : ParserResult<any>) : string{
 
 
 
-export function visualiseSource<T>( pe : ParserResult<T> ) : string {
+export function visualiseSource( pe : ParserResult<string,string> ) : string {
     
     let ixLineStart = 0;
     let ixLineEnd = 0;
@@ -793,10 +793,10 @@ export function visualiseSource<T>( pe : ParserResult<T> ) : string {
     
     // Render the pointy arrow and EOF indicator
     const ixCaret = (pe.indexEnd - ixLineStart);
-    const szCaretLine = ''.padStart(ixCaret, "-") + "^";
+    const szCaretLine = ''.padStart(ixCaret, "-") + "↑";
     
     const ixEof = Math.min(ixLineEnd, pe.source.length) - ixLineStart;
-    const eofLine = (ixLineEnd >= pe.source.length) ? ''.padStart(ixEof, ' ') + '| EOF' : '';
+    const eofLine = (ixLineEnd >= pe.source.length) ? ''.padStart(ixEof, ' ') + '↓ EOF' : '';
 
 
     // Find the line and column of the error
@@ -845,9 +845,9 @@ const colLine = "12345678901234567890 Column"
         //     ;
 
         const tests : Array<[number, string]> = [
-            [ 0, '\n# Sample\n^ (line 1, column 1, index 0)'],
-            [ 9 + 8, '\nIn-between sample line\n--------^ (line 2, column 9, index 17)'],
-            [ 9 + 23 + 0, '                       | EOF\nDocument text goes here\n^ (line 3, column 1, index 32)'],
+            [ 0, '\n# Sample\n↑ (line 1, column 1, index 0)'],
+            [ 9 + 8, '\nIn-between sample line\n--------↑ (line 2, column 9, index 17)'],
+            [ 9 + 23 + 0, '                       ↓ EOF\nDocument text goes here\n↑ (line 3, column 1, index 32)'],
         ]
 
         tests.forEach(([index, expect], testNo) => {
