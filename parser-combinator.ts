@@ -680,3 +680,38 @@ Deno.test({
 export function isError<T>( result : ParserResult<T>) {
     return 'error' in result;
 }
+
+
+
+
+export function stringify(parser : Parser<any>) : Parser<string> {
+    return intercept(parser, result => {
+        
+        if ('value' in result) {
+            result.value = reduceToString(result)
+        }
+
+        return result;
+    });
+}
+
+
+
+
+
+function reduceToString(a : ParserResult<any>) : string{
+
+    if ('error' in a) return '';
+    if (typeof a?.value === "undefined") return '';
+    if (typeof a?.value === "string") return a.value;
+
+    if (Array.isArray(a.value)) {
+        return a.value.reduce(
+            (prev : string, curr : ParserResult<any>) => prev+reduceToString(curr)
+            , ''
+            )
+    }
+
+    return String(a.value);
+
+}

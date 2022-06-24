@@ -1,5 +1,5 @@
 import {assert} from "https://deno.land/std@0.144.0/testing/asserts.ts"
-import {ASCII, optional, alpha, numeric, anyOf, sequence, repeat, token, peek, not, newline, printable, whitespace, zeroOrMore, Parser, ParserResult, intercept, isError} from "./parser-combinator.ts"
+import {ASCII, optional, alpha, numeric, anyOf, sequence, repeat, token, peek, not, newline, printable, whitespace, zeroOrMore, Parser, ParserResult, intercept, isError, stringify} from "./parser-combinator.ts"
 
 const MAX_FRONT_MATTER_LENGTH = 1024;
 
@@ -11,16 +11,8 @@ class ParserError extends Error {
     friendlyMessage : string = '';
 }
 
-function stringify(parser : Parser<any>) : Parser<string> {
-    return intercept(parser, result => {
-        
-        if ('value' in result) {
-            result.value = reduceToString(result)
-        }
 
-        return result;
-    });
-}
+
 
 export function parse( content : string, defaults : FrontMatterProperties = {} ) {
 
@@ -144,19 +136,3 @@ function reduceToValue(a : ParserResult<any>) {
     } 
 }
 
-function reduceToString(a : ParserResult<any>) : string{
-
-    if ('error' in a) return '';
-    if (typeof a?.value === "undefined") return '';
-    if (typeof a?.value === "string") return a.value;
-
-    if (Array.isArray(a.value)) {
-        return a.value.reduce(
-            (prev : string, curr : ParserResult<any>) => prev+reduceToString(curr)
-            , ''
-            )
-    }
-
-    return String(a.value);
-
-}
