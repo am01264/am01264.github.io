@@ -237,20 +237,21 @@ export function sequence<BaseType = string, A extends ParseSource<BaseType> = st
 
         const results : ParserResult<BaseType, A>[] = [];
         
+        let currentIndex = index;
         for (let ix = 0; ix < parsers.length; ix++) {
             const parser = parsers[ix];
-            const result = parser(source, index);
+            const result = parser(source, currentIndex);
 
             if ('error' in result) return result;
             else results.push(result);
 
-            index = result.index;
+            currentIndex = result.indexEnd;
         }
 
         return {
             source,
             indexStart: index,
-            indexEnd: index,
+            indexEnd: currentIndex,
             value: results
         }
 
