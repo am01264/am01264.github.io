@@ -11,31 +11,33 @@ export const ASCII = {
     CARRIAGE_RETURN : '\r',
 }
 
-interface ParserResultCommon {
-    source: string;
+type ParseSource<T = string> = string | ArrayLike<T>
+
+interface ParserResultCommon<BaseType, ArrayType extends ParseSource<BaseType>> {
+    source: ArrayType;
     indexEnd: number;
     indexStart: number;
 }
 
-interface ParserError extends ParserResultCommon {
+interface ParserError<T, A extends ParseSource<T>> extends ParserResultCommon<T, A> {
     error: Error;
 }
 
-interface ParserSuccess<T> extends ParserResultCommon {
-    value: T;
+interface ParserSuccess<T, A extends ParseSource<T>> extends ParserResultCommon<T, A> {
+    value?: T | ParserResult<T,A>[] | A;
 }
 
-export type ParserResult<T> = ParserSuccess<T> | ParserError;
+export type ParserResult<T = string, A extends ParseSource<T> = string> = ParserSuccess<T, A> | ParserError<T, A>;
 
-export type Parser<T> = (source : string, index : number) => ParserResult<T>
-
-
+export type Parser<T = string, A extends ParseSource<T> = string> = (source : A, index : number) => ParserResult<T, A>
 
 
 
-export function intercept<T>( parser : Parser<T>, cb : (result : ParserResult<T>) => any ) : Parser<T> {
 
-    return (source : string, index : number) => {
+
+export function intercept<T = string, A extends ParseSource<T> = string>( parser : Parser<T, A>, cb : (result : ParserResult<T, A>) => any ) : Parser<T, A> {
+
+    return (source : A, index : number) => {
         const result = parser(source, index);
         const response = cb(result);
 
@@ -51,8 +53,8 @@ export function intercept<T>( parser : Parser<T>, cb : (result : ParserResult<T>
 
 
 
-export function peek<T>( parser : Parser<T>, offset = 0 ) : Parser<T> {
-    return (source : string, index : number) => {
+export function peek<T = string, A extends ParseSource<T> = string>( parser : Parser<T, A>, offset = 0 ) : Parser<T, A> {
+    return (source : A, index : number) => {
         // Push the index forward
         const result = parser(source, index + offset);
 
@@ -65,10 +67,10 @@ export function peek<T>( parser : Parser<T>, offset = 0 ) : Parser<T> {
 Deno.test({
     name: peek.name,
     fn() {
-        const failure : Parser<any> = (source : string, index : number) => ({ source, indexStart: index, indexEnd : index, error: new Error("Test only") });
-        const success : Parser<any> = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index + 1, value: null });
+        const failure : Parser = (source : string, index : number) => ({ source, indexStart: index, indexEnd : index, error: new Error("Test only") });
+        const success : Parser = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index + 1, value: '' });
 
-        const test : Array<[Parser<any>,boolean,number]> = [
+        const test : Array<[Parser,boolean,number]> = [
             [failure, false, 0],
             [success, true, 0]
         ];
@@ -89,8 +91,8 @@ Deno.test({
 
 
 
-export function not<T>( parser : Parser<T> ) : Parser<string> {
-    return (source : string, index : number) => {
+export function not<T = string, A extends ParseSource<T> = string>( parser : Parser<T, A> ) : Parser<T, A> {
+    return (source : A, index : number) => {
         const res = parser(source, index);
 
         if ('error' in res) {
@@ -98,7 +100,7 @@ export function not<T>( parser : Parser<T> ) : Parser<string> {
                 source, 
                 indexStart: index,
                 indexEnd : res.indexEnd + 1, 
-                value: source.substring(index, res.indexEnd + 1) 
+                value: undefined
             };
         } else {
             const err = new SyntaxError("Token not allowed");
@@ -118,10 +120,10 @@ export function not<T>( parser : Parser<T> ) : Parser<string> {
 Deno.test({
     name: not.name,
     fn() {
-        const failure : Parser<any> = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index, error: new Error("Test only") });
-        const success : Parser<any> = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index + 1, value: null });
+        const failure : Parser = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index, error: new Error("Test only") });
+        const success : Parser = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index + 1, value: undefined });
 
-        const tests : Array<[Parser<any>, boolean, number]> = [
+        const tests : Array<[Parser, boolean, number]> = [
             [ failure, true, 1 ],
             [ success, false, 0 ]
         ];
@@ -143,11 +145,11 @@ Deno.test({
 
 
 
-export function anyOf( ...parsers : Parser<any>[]) : Parser<any> {
+export function anyOf<T = string,A extends ParseSource<T> = string>( ...parsers : Parser<T,A>[]) : Parser<T,A> {
 
-    return (source : string, index : number) => {
+    return (source : A, index : number) => {
 
-        const results : ParserError[] = [];
+        const results : ParserError<T,A>[] = [];
 
         for (const parser of parsers) {
             const result = parser(source, index);
@@ -173,10 +175,10 @@ Deno.test({
     name: anyOf.name,
     fn() {
 
-        const failure : Parser<any> = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index, error: new Error("Test only") });
-        const success : Parser<any> = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index + 1, value: null });
+        const failure : Parser = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index, error: new Error("Test only") });
+        const success : Parser = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index + 1, value: undefined });
 
-        const tests : Array<[Parser<any>[],boolean,number]> = [
+        const tests : Array<[Parser[],boolean,number]> = [
             [[success, success, success], true, 1],
             [[failure, success, success], true, 1],
             [[success, success, failure], true, 1],
@@ -204,24 +206,24 @@ Deno.test({
 
 
 
-export function optional<T>( parser : Parser<T> ) : Parser<T[]> {
-    return repeat(0, 1, parser);
+export function optional<T = string,A extends ParseSource<T> = string>( parser : Parser<T,A> ) {
+    return repeat<T,A>(0, 1, parser);
 }
 
 
 
 
 
-export function zeroOrMore( parser: Parser<any> ) : Parser<any> {
-    return repeat(0, Number.MAX_SAFE_INTEGER, parser);
+export function zeroOrMore<T = string,A extends ParseSource<T> = string>( parser: Parser<T,A> ) {
+    return repeat<T,A>(0, Number.MAX_SAFE_INTEGER, parser);
 }
 
 
 
 
 
-export function oneOrMore( parser: Parser<any> ) : Parser<any> {
-    return repeat(1, Number.MAX_SAFE_INTEGER, parser);
+export function oneOrMore<T = string,A extends ParseSource<T> = string>( parser: Parser<T,A> ) {
+    return repeat<T,A>(1, Number.MAX_SAFE_INTEGER, parser);
 }
 
 
@@ -229,11 +231,11 @@ export function oneOrMore( parser: Parser<any> ) : Parser<any> {
 
 
 
-export function sequence<T extends readonly any[]>( ...parsers : T ) : Parser<any> {
+export function sequence<BaseType = string, A extends ParseSource<BaseType> = string>( ...parsers : Parser<BaseType, A>[] ) : Parser<BaseType, A> {
 
-    return (source : string, index : number) => {
+    return (source : A, index : number) => {
 
-        const results : ParserResult<T>[] = [];
+        const results : ParserResult<BaseType, A>[] = [];
         
         for (let ix = 0; ix < parsers.length; ix++) {
             const parser = parsers[ix];
@@ -259,10 +261,10 @@ export function sequence<T extends readonly any[]>( ...parsers : T ) : Parser<an
 Deno.test({
     name: sequence.name,
     fn() {
-        const failure : Parser<any> = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index, error: new Error("Test only") });
-        const success : Parser<any> = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index + 1, value: null });
+        const failure : Parser = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index, error: new Error("Test only") });
+        const success : Parser = (source : string, index : number) => ({ source, indexStart: index, indexEnd: index + 1, value: undefined });
 
-        const tests = [
+        const tests : Array<[Parser[], boolean, number]> = [
             [[success, success, success], true, 3],
             [[failure, success, success], false, 0],
             [[success, success, failure], false, 2],
@@ -292,12 +294,12 @@ Deno.test({
 
 
 
-export function repeat<T>(minimum = 0, maximum = Number.MAX_SAFE_INTEGER, parser : Parser<T>) : Parser<any[]> {
+export function repeat<T = string, A extends ParseSource<T> = string>(minimum = 0, maximum = Number.MAX_SAFE_INTEGER, parser : Parser<T,A>) : Parser<T,A> {
 
-    return (source : string, index : number) => {
+    return (source : A, index : number) => {
         
         let count;
-        const results : ParserSuccess<T>[] = [];
+        const results : ParserSuccess<T,A>[] = [];
 
         let currentIndex = index;
         for (count = 0; count < maximum; count++) {
@@ -384,20 +386,25 @@ Deno.test({
 
 
 
-export function token(token : string) : Parser<string> {
+export function token(token : string) : Parser {
 
     return (source : string, index : number) => {
 
         let ixSeek = index;
         for (let ixToken = 0; ixToken < token.length; ixToken++, ixSeek++) {
             if (ixSeek >= source.length) {
-                return <ParserError>{ source, indexStart: index, indexEnd: ixSeek, error: new SyntaxError(`Expected ${token}, got EOF`) }
+                return { source, indexStart: index, indexEnd: ixSeek, error: new SyntaxError(`Expected ${token}, got EOF`) }
             } else if (source[ixSeek] !== token[ixToken]) {
-                return <ParserError>{ source, indexStart: index, indexEnd: ixSeek, error: new SyntaxError(`Expected ${token}, got something else`) }
+                return { source, indexStart: index, indexEnd: ixSeek, error: new SyntaxError(`Expected ${token}, got something else`) }
             }
         }
 
-        return <ParserSuccess<string>>{ source, indexStart: index, indexEnd : ixSeek, value: source.substring(index, ixSeek) }
+        return { 
+            source, 
+            indexStart: index, 
+            indexEnd : ixSeek, 
+            value: source.substring(index, ixSeek) 
+        }
 
     }
 
@@ -436,7 +443,7 @@ Deno.test({
 
 
 
-export function alpha(source : string, index : number) : ParserResult<string> {
+export function alpha(source : string, index : number) : ParserResult<string, string> {
     const char = source[index];
     
     if (char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z') {
@@ -493,7 +500,7 @@ Deno.test({
 
 
 
-export function numeric(source : string, index : number) : ParserResult<string> {
+export function numeric(source : string, index : number) : ParserResult<string, string> {
     const char = source[index];
 
     if (char >= '0' && char <= '9') {
@@ -550,7 +557,7 @@ Deno.test({
 
 
 
-export function printable(source : string, index: number) : ParserResult<string> {
+export function printable(source : string, index: number) : ParserResult<string, string> {
     if ((source.codePointAt(index) || 0) >= 0x20 /* ASCII Printable Start */) {
         return {
             source, indexStart: index, indexEnd: index + 1, value: source[index]
@@ -598,7 +605,7 @@ Deno.test({
 
 
 
-export function whitespace(source : string, index : number) : ParserResult<string> {
+export function whitespace(source : string, index : number) : ParserResult<string, string> {
 
     switch (source[index]) {
         case ASCII.TAB:
@@ -717,14 +724,14 @@ Deno.test({
 
 
 
-export function isError<T>( result : ParserResult<T>) {
+export function isError<T = string,A extends ParseSource<T> = string>( result : ParserResult<T,A>) : result is ParserError<T,A> {
     return 'error' in result;
 }
 
 
 
 
-export function stringify(parser : Parser<any>) : Parser<string> {
+export function stringify(parser : Parser) : Parser {
     return intercept(parser, result => {
         
         if ('value' in result) {
@@ -853,12 +860,10 @@ const colLine = "12345678901234567890 Column"
 })
 
 
-
-
-function eof<T>(source : string, index : number ) : ParserResult<boolean> {
+function eof<T = string, A extends ParseSource<T> = string>(source : A, index : number ) : ParserResult<T,A> {
     if (index >= source.length) {
         return {
-            source, indexStart: index, indexEnd: index, value: true
+            source, indexStart: index, indexEnd: index, value: undefined
         }
     } else {
         return {
