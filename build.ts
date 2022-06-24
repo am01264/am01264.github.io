@@ -1,4 +1,5 @@
 import {parse, FrontMatterProperties} from "./front-matter-parser.ts"
+import {checkLinks} from "./link-checker.ts";
 
 const dirBase = "./_posts";
 const files = [];
@@ -6,6 +7,7 @@ const files = [];
 for await (const inode of Deno.readDir("./_posts")) {
     if (! inode.isFile) continue;
     if (! inode.name.endsWith('.md')) continue;
+    
     files.push({ ...inode,
         path: `${dirBase}/${inode.name}`,
     });
@@ -47,9 +49,24 @@ for (const file of files) {
     const szDocument = await Deno.readTextFile(file.path);
     const result = parse(szDocument, defaults);
 
-    if (!(result instanceof Error)) {
-        console.dir(result)
+    let props = defaults;
+    let frontMatterLength = 0;
+
+    if (result instanceof Error) {
+        console.warn(`Unable to read front matter due to errors: ${file.name}\n%o`, result);
+    } else {
+        props = {...defaults, ...result.meta};
+        frontMatterLength = result.frontMatterLength;
     }
 
+    const markdown = szDocument.substring(frontMatterLength);
+
+    checkLinks(markdown, {
+        abortOnFirstFail: true,
+        baseURL: props.url as string,
+        redirectsAllowed: false,
+        timeout: 5000
+    });
+    
 }
 
