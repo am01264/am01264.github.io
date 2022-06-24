@@ -1,5 +1,4 @@
-import {assert} from "https://deno.land/std@0.144.0/testing/asserts.ts"
-import {ASCII, optional, alpha, numeric, anyOf, sequence, repeat, token, peek, not, newline, printable, whitespace, zeroOrMore, Parser, ParserResult, intercept, isError, stringify} from "./parser-combinator.ts"
+import {ASCII, alpha, numeric, anyOf, sequence, repeat, token, peek, not, newline, whitespace, zeroOrMore, Parser, ParserResult, intercept, stringify, visualiseSource} from "./parser-combinator.ts"
 
 const MAX_FRONT_MATTER_LENGTH = 1024;
 
@@ -106,14 +105,8 @@ export function parse( content : string, defaults : FrontMatterProperties = {} )
         const result = frontMatterParser(content, 0);
         
         if ('error' in result) {
-            const lines = result.source.substring(0, result.index + 1).split('\n')
-            const err = new ParserError(`Failed to parse front matter correctly
-
-Found issue on line ${lines.length}, column ${lines[lines.length - 1].length}:
-    > ${result.source.substring(result.index, result.index + 80).split('\n').join('\n    > ') + '...'}
-`
-                , {cause: result.error}
-                );
+            visualiseSource(result)
+            const err = new ParserError(`Failed to parse front matter correctly:\n${visualiseSource(result)}`, {cause: result.error});
 
             return err;
         }
