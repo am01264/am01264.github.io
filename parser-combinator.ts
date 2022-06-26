@@ -986,3 +986,96 @@ Deno.test({
         assertNotEquals(a, b, "Oh god. Function pointers are the same *facepalm*")
     }
 })
+
+
+export function* treeIterator( root : ParserResult, depth : number = 1 ) {
+
+    if ( ('error' in root)
+        || ('value' in root && ! Array.isArray(root.value))
+    ) {
+        yield root;
+        return;
+    }
+
+    const arrParent : ParserResult[] = [];
+    const arrIxChildren : number[] = [];
+
+    let ixStack : number = 0;
+    
+    arrParent.push(root);
+    arrIxChildren.push(0);
+
+    // We walk over the stack backwards
+    STACK_LOOP:
+    for (let ixStack = 0; ixStack > -1; ixStack--) {    
+
+        const parent = arrParent[ixStack];
+        
+        if (! ('value' in parent) || ! Array.isArray(parent.value)) {
+            throw new TypeError("Expected to be able iterate children of node.");
+        }
+
+        CHILD_LOOP:
+        for (;
+            arrIxChildren[ixStack] < parent.value.length;
+            arrIxChildren[ixStack]++
+            )
+        {
+            const ixChild = arrIxChildren[ixStack];
+            const child = parent.value[ixChild];
+            
+            if (! isParseResult(child)) {
+                // If it's not a parse result, skip it
+                continue CHILD_LOOP;
+            }
+
+            const response : AdjustWalk | undefined = yield child;
+
+            switch (response) {
+                case AdjustWalk.StopSearch:
+                    return;
+
+                case AdjustWalk.StopDescent:
+                    continue CHILD_LOOP;
+
+                default:
+                    // Take no action
+            }
+
+            if ('value' in child && Array.isArray(child.value) && ixStack < depth) {
+                // Add the child to the stack
+                arrParent.push(child);
+                arrIxChildren.push(0);
+                
+                // Mark that we've seen this child
+                // ...for-loop would normally do this at the end, but we're exiting CHILD_LOOP early
+                arrIxChildren[ixStack]++;
+                
+                // Move the stack pointer ahead, then start processing the new entry
+                ixStack++;
+                continue STACK_LOOP;
+            }
+
+        }
+
+        // We reach here when CHILD_LOOP has finished it's current lot of children
+        // We just remove the last element of the array
+        if (ixStack !== arrParent.length - 1) throw RangeError("Expected end of stack entry")
+        arrParent.pop()
+        arrIxChildren.pop()
+
+    }
+
+    return;
+
+}
+
+function isParseResult<T, A extends ParseSource<T>>( thing : any ) : thing is ParserResult<T,A> {
+    
+    return typeof thing === "object"
+        && (thing.author && typeof thing.author === "function")
+        && (thing.source && typeof thing.source !== "undefined")
+        && (thing.indexStart && Number.isSafeInteger(thing.indexStart))
+        && (thing.indexEnd && Number.isSafeInteger(thing.indexEnd))
+    
+}
