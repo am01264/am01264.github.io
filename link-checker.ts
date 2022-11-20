@@ -151,6 +151,8 @@ Deno.test({
                     throw node.error;
                 }
                 
+                if (node.author !== linkDestination) return AdjustWalk.Continue;
+
                 const actual = node.source.substring(node.indexStart, node.indexEnd);
                 assertEquals(actual, expect);
                 return AdjustWalk.Continue;
