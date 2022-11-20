@@ -1,5 +1,6 @@
 import {treeIterator, ASCII, voidParser, walkParseTree, AdjustWalk, alpha, numeric, anyOf, sequence, repeat, token, peek, not, newline, whitespace, zeroOrMore, Parser, ParserResult, intercept, stringify, visualiseSource} from "./parser-combinator.ts"
 import {RuleEngine} from "./misc.ts"
+import {assertEquals} from "https://deno.land/std@0.144.0/testing/asserts.ts"
 
 function assume(condition : any, message : string) : asserts condition {
     if (!condition) throw new Error(message);
@@ -196,7 +197,7 @@ ParseTreeToAstRules.add(frontMatterParser, function getAstFromFrontMatter(node) 
 
     const maxPropDepth = 4; // (1) frontParser/sequence (2) repeat (3) anyOf (4) property
     for (const prop of treeIterator(node, maxPropDepth)) {
-        if (! knownProperties.includes(prop.author)) continue;
+        if (! (knownProperties.includes(prop.author) || prop.author === propUnknown)) continue;
         newValue.push(prop);
     }
 
@@ -249,8 +250,8 @@ export function parse( content : string, defaults : Map<string, string|string[]>
     parseTree.value.forEach(node => {
         
         if (node === parseTree) return;
-    
-        assume(knownProperties.includes(node.author), "Unrecognised node in tree");
+
+        assume([fence, ...knownProperties].includes(node.author), "Unrecognised node in tree");
         assume('value' in node && Array.isArray(node.value) && node.value.length === 2, "Malformed property tree");
     
         const nodeName = node.value[0];
@@ -285,22 +286,24 @@ export function parse( content : string, defaults : Map<string, string|string[]>
     // 3. Return the results!
 
     return { 
-        return { 
-    return { 
         props: mKeyValue, 
         frontMatterLength: parseTree.indexEnd + 1
     };
 
 }
 
-function findNodeWithAuthor(author : Parser, root : ParserResult, maxDepth = 2) : ParserResult | undefined {
+Deno.test({
+    name: parse.name,
+    fn() {
 
-    for (const node of treeIterator(root, maxDepth)) {
-        if (node.author === author) {
-            return node;
-        }
+        const expect = new Map();
+        expect.set('title', 'hello');
+
+        const actual = parse('---\ntitle: hello\n---\n');
+
+        if (actual instanceof Error) throw actual;
+
+        assertEquals(expect, actual.props);
+
     }
-
-    return;
-
-}
+})
