@@ -165,24 +165,21 @@ Deno.test({
 
 
 function parseLinksFromMarkdown( markdown : string ) {
-console.group("parseLinksFromMarkdown")
+
     const linkParser = anyOf(inlineLink, linkLabel);
 
     const links : string[] = [];
 
     for (let ix = 0; ix < markdown.length; ix++) {
 
-        console.info(`Starting parse at ${ix}`)
+        // Starting parse at ix, fast-forward to first possible link character
         while (ix < markdown.length && markdown[ix] !== "[") { ix++ }
         
         if (ix >= markdown.length) {
-            console.info("Reached end of document.")
+            // Reached end of document.
             break;
         }
 
-        console.info(`Fast forwarded to ${ix}. Attempting link parse...`)
-
-        // Fast forward
         const result = linkParser(markdown, ix)
 
         if ('error' in result) {
@@ -216,7 +213,7 @@ console.group("parseLinksFromMarkdown")
         ix = result.indexEnd;
 
     }
-console.groupEnd();
+
     return links;
 
 }
@@ -265,16 +262,21 @@ async function tryLink( l : string, options : TryLinkOptions = { baseURL: undefi
             signal: timeoutControl.signal
         })
 
+        if (result.status === 200)
+            console.log(`Successfully loaded ${url} (HTTP 200)`)
+        else
+            console.log(`Attempted to fetch ${url}, received HTTP ${result.status || NaN}`)
+
     } catch (ex) {
 
         if (typeof ex.name === 'string' && ex.name === "AbortError") {
             // AbortError is our timeout
-            console.trace("Request timed out on URL: %s", l);
+            console.warn("Request timed out on URL: %s", l);
             return new RangeError("Request timed out", { cause: ex })
 
         } else if (ex instanceof TypeError) {
             // TypeError likely due to no internet access
-            console.trace("Unable to fetch URL: %s", l);
+            console.warn("Unable to fetch URL: %s", l);
             return ex;
 
         } else {
