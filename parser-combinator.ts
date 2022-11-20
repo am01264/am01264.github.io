@@ -1013,7 +1013,7 @@ export function* treeIterator( root : ParserResult, depth : number = 1 ) {
 
     // We walk over the stack backwards
     STACK_LOOP:
-    for (let ixStack = 0; ixStack > -1; ixStack--) {    
+    for (let ixStack = 0; ixStack > -1; ) {    
 
         const parent = arrParent[ixStack];
         
@@ -1069,6 +1069,7 @@ export function* treeIterator( root : ParserResult, depth : number = 1 ) {
         if (ixStack !== arrParent.length - 1) throw RangeError("Expected end of stack entry")
         arrParent.pop()
         arrIxChildren.pop()
+        ixStack--;
 
     }
 
