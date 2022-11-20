@@ -15,55 +15,57 @@ for await (const inode of Deno.readDir("./_posts")) {
 
 for (const file of files) {
 
-    const defaults : FrontMatterProperties = {
-        published: "false",
-        tags: [],
-        title: 'Untitled',
-        description: "This post doesn't have a teaser yet.",
-        layout: 'post',
-        author: 'Andrew McAuley'
-    };
+    const defaults = new Map();
+    defaults.set("published", "false");
+    defaults.set("tags", []);
+    defaults.set("title", 'Untitled');
+    defaults.set("description", "This post doesn't have a teaser yet.");
+    defaults.set("layout", 'post');
+    defaults.set("author", 'Andrew McAuley');
     
 
     // Set date
     const date = /^\d{4}-?\d{2}-?\d{2}(T\d{2}:?\d{2}Z)?/.exec(file.name)?.[0];
-    if (date) defaults.date = date;
+    if (date) defaults.set("date", date);
 
     // Set title
-    defaults.title = (date ? file.name.substring(date.length).replace(/^(-|\s+)/, '') : file.name)
+    let fileTitle = 
+        (date ? file.name.substring(date.length).replace(/^(-|\s+)/, '') : file.name)
         .replace(/.md$/, '')
-        .replace(/-/, ' ')
-        ;
+        .replace(/-/, ' ');
+    defaults.set("title", fileTitle);
 
     // Generate Jekyll-style URL
-    defaults.url = '';
+    let fileURL = '';
     
     if (date) {
         const dtDate = new Date(date);
-        defaults.url += `/${ dtDate.getFullYear().toString().padStart(4,'0') }/${ (dtDate.getMonth() + 1).toString().padStart(2,'0') }/${ dtDate.getDate().toString().padStart(2,'0') }`
+        fileURL += `/${ dtDate.getFullYear().toString().padStart(4,'0') }/${ (dtDate.getMonth() + 1).toString().padStart(2,'0') }/${ dtDate.getDate().toString().padStart(2,'0') }`
     }
 
-    defaults.url += `/${ defaults.title.replaceAll(/ /g,'-') }.html`
+    fileURL += `/${ fileTitle.replaceAll(/ /g,'-') }.html`
+    defaults.set("url", fileURL);
 
     console.log(file.path)
     const szDocument = await Deno.readTextFile(file.path);
     const result = parse(szDocument, defaults);
 
-    let props = defaults;
+    let baseURL = fileURL;
     let frontMatterLength = 0;
 
     if (result instanceof Error) {
         console.warn(`Unable to read front matter due to errors: ${file.name}\n%o`, result);
     } else {
-        props = {...defaults, ...result.meta};
+        baseURL = ''+result.props.get("url") || fileURL;
         frontMatterLength = result.frontMatterLength;
+        console.info(result.props)
     }
 
     const markdown = szDocument.substring(frontMatterLength);
 
     checkLinks(markdown, {
         abortOnFirstFail: true,
-        baseURL: props.url as string,
+        baseURL: baseURL,
         redirectsAllowed: false,
         timeout: 5000
     });
