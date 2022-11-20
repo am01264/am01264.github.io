@@ -162,7 +162,13 @@ export function anyOf<T = string,A extends ParseSource<T> = string>( ...parsers 
         for (const parser of parsers) {
             const result = parser(source, index);
             
-            if (! ('error' in result)) return result;
+            if (! ('error' in result)) return {
+                author: parseAnyOf,
+                source,
+                indexStart: result.indexStart,
+                indexEnd: result.indexEnd,
+                value: [result]
+            }
             else results.push(result);
         }
 
