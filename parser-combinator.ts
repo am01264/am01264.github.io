@@ -996,10 +996,11 @@ Deno.test({
 
 export function* treeIterator( root : ParserResult, depth : number = 1 ) {
 
+    yield root;
+    
     if ( ('error' in root)
         || ('value' in root && ! Array.isArray(root.value))
     ) {
-        yield root;
         return;
     }
 
