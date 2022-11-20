@@ -68,32 +68,36 @@ const linkTitle = anyOf(
 
 const inlineLink = sequence(
     linkText, 
-    token("("), 
     anyOf(
         // [hello](/world)
         sequence(
+            token("("), 
             zeroOrMore(spaceOrTab), 
             linkDestination,
             zeroOrMore(spaceOrTab), 
+            token(")")
         ),
 
         // [hello](/world "time to die")
         sequence(
+            token("("), 
             zeroOrMore(spaceOrTab), 
             linkDestination,
             oneOrMore(spaceOrTab), 
             linkTitle,
             zeroOrMore(spaceOrTab), 
+            token(")")
         ),
 
         // [minions-go]("bello!")
         sequence(
+            token("("), 
             zeroOrMore(spaceOrTab), 
             linkTitle,
             zeroOrMore(spaceOrTab), 
+            token(")")
         )
-    ),
-    token(")"));
+    ));
 
 const linkLabel = sequence(
     token("["),
