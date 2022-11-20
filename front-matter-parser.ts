@@ -1,7 +1,7 @@
 import {treeIterator, ASCII, voidParser, walkParseTree, AdjustWalk, alpha, numeric, anyOf, sequence, repeat, token, peek, not, newline, whitespace, zeroOrMore, Parser, ParserResult, intercept, stringify, visualiseSource} from "./parser-combinator.ts"
 import {RuleEngine} from "./misc.ts"
 
-function alwaysAssert(condition : any, message : string) : asserts condition {
+function assume(condition : any, message : string) : asserts condition {
     if (!condition) throw new Error(message);
 }
 
@@ -51,7 +51,7 @@ const indent = anyOf(token(ASCII.TAB), repeat(2, 4, token(ASCII.SPACE)));
     
     // Simplify the value to a string
 
-    ParseTreeToAstRules.add(parser, node => {
+    ParseTreeToAstRules.add(parser, function astFromTextNode(node) {
         if ('error' in node) return new ParserError("Unexpected error", node);
         
         // Reduce the value to a simple string
@@ -89,7 +89,7 @@ const list = zeroOrMore(
 
 [paragraph, list].forEach(parser => {
 
-    ParseTreeToAstRules.add(parser, node => {
+    ParseTreeToAstRules.add(parser, function astFromListOrParagraph(node) {
 
         if ('error' in node) return new ParserError("Unexpected error", node);
 
@@ -140,14 +140,11 @@ function property(name : Parser<any>, value : Parser<any>) : Parser<any> {
     const INDEX_VALUE = 4;
 
     // Here we simplify child-nodes to a name-value pair
-    ParseTreeToAstRules.add(parser, node => {
+    ParseTreeToAstRules.add(parser, function astFromProperty(node) {
 
         if ('error' in node) return new ParserError("Unexpected error", node);
         
-        if (! ('value' in node) || ! Array.isArray(node.value)) {
-            // Programmer error only at this point
-            throw new TypeError("Expected iterable value for known property");
-        }
+        assume('value' in node && Array.isArray(node.value), "Expected iterable value for known property");
         
         node.value = [ node.value[INDEX_NAME], node.value[INDEX_VALUE] ];
         return node;
@@ -166,12 +163,6 @@ const propLayout = property(token("layout"), identifier);
 const propAuthor = property(token("author"), line);
 const propTags = property(token("tags"), list);
 
-const propUnknown = property(identifier, line);
-
-ParseTreeToAstRules.add(propUnknown, node => {
-    return new ParserError("Unknown property", node)
-})
-
 const knownProperties = [
     propPublished,
     propTitle,
@@ -179,33 +170,25 @@ const knownProperties = [
     propLayout,
     propAuthor,
     propTags,
-
-    // Always last item
-    propUnknown
 ];
 
+const propUnknown = property(identifier, line);
+
+ParseTreeToAstRules.add(propUnknown, function errorUnknownProperty(node) {
+    return new ParserError("Unrecognised property", node)
+})
 
 
 
 const fence = sequence(token(ASCII.DASH+ASCII.DASH+ASCII.DASH), newline)
 
-ParseTreeToAstRules.add(fence, node => {
-    if ('error' in node) return new ParserError("Unexpected error", node);
-    
-    node.value = node.source.substring(node.indexStart, node.indexEnd);
-    return node;
-})
-
-
-
-
 const frontMatterParser = sequence(
     fence, 
-    repeat(1, Number.MAX_SAFE_INTEGER, anyOf(...knownProperties)),
+    repeat(1, Number.MAX_SAFE_INTEGER, anyOf(...knownProperties, propUnknown)),
     fence, 
 );
 
-ParseTreeToAstRules.add(frontMatterParser, node => {
+ParseTreeToAstRules.add(frontMatterParser, function getAstFromFrontMatter(node) {
     if ('error' in node) return new ParserError("Unexpected error", node);
 
     // Reduce to properties
@@ -221,125 +204,93 @@ ParseTreeToAstRules.add(frontMatterParser, node => {
     return node;
 })
 
-export function parse( content : string, defaults : FrontMatterProperties = {} ) {
-
-        // 0. Parse the content into a parse tree
-
-        const props = {...defaults}
-        const result = frontMatterParser(content, 0);
-
-        if ('error' in result) {
-            visualiseSource(result)
-            const err = new ParserError(`Failed to parse front matter correctly:`, result);
-
-            return err;
-        }
-
-        // 1. Simplify the parse tree into an AST-like form
-
-        const searchDepth = 32;
-        const it = treeIterator(result, searchDepth);
-
-        for (const node of treeIterator(result, searchDepth)) {
-            if ('error' in node) {
-                return new ParserError("Unexpected error", node);
-            } else {
-                ParseTreeToAstRules.processUntilFirstFail(node);
-            }
-        }
 
 
 
-        // 2. Process the AST
+
+export function parse( content : string, defaults : Map<string, string|string[]> = new Map ) {
+
+    // 0. Parse the content into a parse tree
+
+    const parseTree = frontMatterParser(content, 0);
+
+    if ('error' in parseTree) {
+        visualiseSource(parseTree)
+        const err = new ParserError(`Failed to parse front matter correctly:`, parseTree);
+
+        return err;
+    }
+
+    // 1. Simplify the parse tree into an AST-like form
+
+    const searchDepth = 32;
+    const it = treeIterator(parseTree, searchDepth);
+
+    for (const node of treeIterator(parseTree, searchDepth)) {
         
-        const maxPropDepth = 2;
-        for (const prop of treeIterator(result, maxPropDepth)) {
-            if ('error' in prop) continue;
-
-            const attemptStringProperty = (propParser : Parser, propName : string, valueParser : Parser, valueName : string) => {
-
-                const node = findNodeWithAuthor(bool, prop, 2);
-
-                if (!node) throw new ReferenceError(`Expected ${valueName} token for "${propName}" property`, {cause: prop});
-
-                if (! ('value' in node && typeof node.value === "string")) {
-                    throw new TypeError(`Expected string value for ${propName}`)
-                }
-                
-                props["published"] = node.value;
-
-            }
-
-            switch (prop.author) {
-
-                case propPublished:
-                    const nBool = findNodeWithAuthor(bool, prop, 2);
-                    if (!nBool || 'error' in nBool) throw new ReferenceError("Expected boolean token for `published` property", {cause: prop});
-                    if (typeof nBool.value !== "string") throw new TypeError("Expected string value on bool", {cause: nBool})
-                    props["published"] = nBool.value;
-                    break;
-
-                case propTitle:
-                    const nLink = findNodeWithAuthor(line, prop, 2);
-                    if (!nLink || 'error' in nLink) throw new ReferenceError("Expected line of text for `title` property", {cause: prop});
-                    if (typeof nLink.value !== "string") throw new TypeError("Expected string value on line", {cause: nLink})
-                    props["title"] = nLink.value;
-                    break;
-
-                case propDescription:
-                    const nParagraph = findNodeWithAuthor(paragraph, prop, 2);
-                    if (!nParagraph || 'error' in nParagraph) throw new ReferenceError("Expected paragraph for `description` property", {cause: prop});
-                    if (typeof nParagraph.value !== "string") throw new TypeError("Expected string value on paragraph", {cause: nParagraph})
-                    props["description"] = nParagraph.value;
-                    break;
-
-
-                case propLayout:
-                    const nIdentifier = findNodeWithAuthor(identifier, prop, 2);
-                    if (!nIdentifier || 'error' in nIdentifier) throw new ReferenceError("Expected identifier token for `layout` property", {cause: prop});
-                    if (typeof nIdentifier.value !== "string") throw new TypeError("Expected string value on identifier", {cause: nIdentifier})
-                    props["layout"] = nIdentifier.value;
-                    break;
-
-                case propAuthor:
-                    const nLine = findNodeWithAuthor(line, prop, 2);
-                    if (!nLine || 'error' in nLine) throw new ReferenceError("Expected line of text for `author` property", {cause: prop});
-                    if (typeof nLine.value !== "string") throw new TypeError("Expected string value on line", {cause: nLine})
-                    props["author"] = nLine.value;
-                    break;
-
-                case propTags:
-                    const arrList = [];
-                    
-                    for (const nLine of treeIterator(prop, 2)) {
-                        if (nLine.author !== line || 'error' in nLine) continue;
-                        if (typeof nLine.value !== "string") throw new TypeError("Expected string value on line", {cause: nLine});
-                        arrList.push(nLine.value)
-                    }
-
-                    props["tags"] = arrList;
-                    break;
-
-                default:
-                    console.log('Error simplifying %o', prop.author)
-                    console.log(visualiseSource(prop))
-                    console.log('\n')
-
-                    throw new TypeError("Unrecognised property", {cause: prop})
-            }
+        if ('error' in node) {
+            return new ParserError("Parse error.", node);
+        } 
+        
+        const res = ParseTreeToAstRules.processUntilFirstFail(node);
+        if (res instanceof Error) {
+            return new ParserError("Error processing Parse Tree.", node);
         }
 
+    }
 
+    // 2. Process the AST
+    
+    const mKeyValue = new Map<string,string|string[]>(
+        defaults.entries()
+    );
+ 
+    assume('value' in parseTree && Array.isArray(parseTree.value), "Malformed front matter in tree")
+    parseTree.value.forEach(node => {
+        
+        if (node === parseTree) return;
+    
+        assume(knownProperties.includes(node.author), "Unrecognised node in tree");
+        assume('value' in node && Array.isArray(node.value) && node.value.length === 2, "Malformed property tree");
+    
+        const nodeName = node.value[0];
+        const nodeValue = node.value[1];
+    
+        const propName = nodeName.source.substring(nodeName.indexStart, nodeName.indexEnd);
+        
+        // Find the property value and set the property
+    
+        if (nodeValue.author !== list) {
+            const propValue = nodeValue.source.substring(nodeValue.indexStart, nodeValue.indexEnd);
+            mKeyValue.set( propName, propValue );
+    
+        } else {
+    
+            assume('value' in nodeValue && Array.isArray(nodeValue.value), "Malformed list tree");
+    
+            const arrValue = nodeValue.value.reduce((arr : string[], childNode : ParserResult) => {
+                arr.push(
+                    // Reduce children to strings
+                    childNode.source.substring(childNode.indexStart, childNode.indexEnd)
+                );
+                return arr;
+            }, []);
+    
+            mKeyValue.set(propName, arrValue);
 
+        }
 
+    });
 
-        // 3. Return the results!
+    // 3. Return the results!
 
+    return { 
         return { 
-            meta: props, 
-            frontMatterLength: result.indexEnd + 1
-        };
-        
+    return { 
+        props: mKeyValue, 
+        frontMatterLength: parseTree.indexEnd + 1
+    };
+
 }
 
 function findNodeWithAuthor(author : Parser, root : ParserResult, maxDepth = 2) : ParserResult | undefined {
