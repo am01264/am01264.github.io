@@ -9,26 +9,35 @@ type rule = {
 
 export class RuleEngine {
     
-    rules : Array<rule>;
-    
+    mRules: Map<Parser, ruleFn[]>;
+
     constructor() {
-        this.rules = [];
+        this.mRules = new Map();
     }
 
     add( parser: Parser, rule : ruleFn ) {
-        this.rules.push({ parser, rule })
+        
+        const newRuleFns = this.mRules.get(parser) || [];
+        newRuleFns.push(rule);
+        
+        this.mRules.set(parser, newRuleFns)
+
     }
 
     processUntilFirstFail( source : ParserResult ) {
 
-        for (const {parser, rule} of this.rules) {
-            if (source.author !== parser) continue;
-            
-            const res = rule(source);
+        const parser = source.author;
+        const rules = this.mRules.get(parser) || [];
+
+        for (const fnRule of rules) {
+            const res = fnRule(source);
+
             if (res instanceof Error) {
-                throw res;
+                return new TypeError("Rule failed to run.", {cause: res});
             }
         }
+
+        return source;
 
     }
 }
