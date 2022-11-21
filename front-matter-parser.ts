@@ -26,10 +26,6 @@ class ParserError extends Error {
 //    This is handled by...
 const ParseTreeToAstRules = new RuleEngine();
 
-// 3. Validate the results
-//    This is handled by...
-const AstValidateRules = new RuleEngine();
-
 
 
 // YAML-like Language Definitions
@@ -96,13 +92,10 @@ const list = zeroOrMore(
 
         const newValue = [];
 
-        for (const nLine of treeIterator(node)) {
+        for (const nLine of treeIterator(node, 4 /* zeroOrMore + sequence + line OR sequence + zeroOrMore + sequence + line */)) {
 
             if ('error' in nLine) return new ParserError("Unexpected error", nLine);
             if (nLine.author !== line) continue;
-            
-            // Reduce line to a string value
-            ParseTreeToAstRules.processUntilFirstFail(nLine);
             
             newValue.push(nLine);
         }
@@ -155,63 +148,50 @@ function property(name : Parser<any>, value : Parser<any>) : Parser<any> {
 
 }
 
+export enum PropertyKind {
+    Boolean,
+    Line,
+    Paragraph,
+    Identifier,
+    List
+}
 
+interface PropertyMetadata {
+    property: string,
+    type: PropertyKind,
+    defaultsTo: any
+}
 
-const propPublished = property(token("published"), bool);
-const propTitle = property(token("title"), line);
-const propDescription = property(token("description"), paragraph);
-const propLayout = property(token("layout"), identifier);
-const propAuthor = property(token("author"), line);
-const propTags = property(token("tags"), list);
+const PropertyKindParserMap = new Map([
+    [PropertyKind.Boolean, bool],
+    [PropertyKind.Identifier, identifier],
+    [PropertyKind.Line, line],
+    [PropertyKind.List, list],
+    [PropertyKind.Paragraph, paragraph]
+])
 
-const knownProperties = [
-    propPublished,
-    propTitle,
-    propDescription,
-    propLayout,
-    propAuthor,
-    propTags,
-];
-
-const propUnknown = property(identifier, line);
-
-ParseTreeToAstRules.add(propUnknown, function errorUnknownProperty(node) {
-    return new ParserError("Unrecognised property", node)
-})
 
 
 
 const fence = sequence(token(ASCII.DASH+ASCII.DASH+ASCII.DASH), newline)
 
-const frontMatterParser = sequence(
-    fence, 
-    repeat(1, Number.MAX_SAFE_INTEGER, anyOf(...knownProperties, propUnknown)),
-    fence, 
-);
-
-ParseTreeToAstRules.add(frontMatterParser, function getAstFromFrontMatter(node) {
-    if ('error' in node) return new ParserError("Unexpected error", node);
-
-    // Reduce to properties
-    const newValue = [];
-
-    const maxPropDepth = 4; // (1) frontParser/sequence (2) repeat (3) anyOf (4) property
-    for (const prop of treeIterator(node, maxPropDepth)) {
-        if (! (knownProperties.includes(prop.author) || prop.author === propUnknown)) continue;
-        newValue.push(prop);
-    }
-
-    node.value = newValue;
-    return node;
-})
 
 
+export function parse( content: string, properties: ArrayLike<PropertyMetadata>) {
 
+    // Build the parser based on the given properties
 
+    const knownProperties = 
+        Array.from(properties)
+        .map(n => property(token(n.property), PropertyKindParserMap.get(n.type) || line));
 
-export function parse( content : string, defaults : Map<string, string|string[]> = new Map ) {
+    const frontMatterParser = sequence(
+        fence, 
+        repeat(1, Number.MAX_SAFE_INTEGER, anyOf(...knownProperties)),
+        fence, 
+    );
 
-    // 0. Parse the content into a parse tree
+    // 0. Parse the content
 
     const parseTree = frontMatterParser(content, 0);
 
@@ -241,47 +221,45 @@ export function parse( content : string, defaults : Map<string, string|string[]>
     }
 
     // 2. Process the AST
-    
-    const mKeyValue = new Map<string,string|string[]>(
-        defaults.entries()
-    );
- 
-    assume('value' in parseTree && Array.isArray(parseTree.value), "Malformed front matter in tree")
-    parseTree.value.forEach(node => {
-        
-        if (node === parseTree) return;
 
-        assume([fence, ...knownProperties].includes(node.author), "Unrecognised node in tree");
-        assume('value' in node && Array.isArray(node.value) && node.value.length === 2, "Malformed property tree");
-    
+    const mKeyValue = new Map(
+        Array.from(properties).map(n => [ n.property, n.defaultsTo ])
+    );
+
+    for (const node of treeIterator(parseTree, 4 /* front parser + repeat + anyOf + property */)) {
+        
+        if ('error' in node) continue;
+        if (! knownProperties.includes(node.author)) continue;
+
+        assume('value' in node && Array.isArray(node.value) && node.value.length === 2, "Badly formed parse tree for property");
+
+        // Property found, extract the property-name & value
+
         const nodeName = node.value[0];
         const nodeValue = node.value[1];
-    
-        const propName = nodeName.source.substring(nodeName.indexStart, nodeName.indexEnd);
-        
-        // Find the property value and set the property
-    
-        if (nodeValue.author !== list) {
-            const propValue = nodeValue.source.substring(nodeValue.indexStart, nodeValue.indexEnd);
-            mKeyValue.set( propName, propValue );
-    
-        } else {
-    
-            assume('value' in nodeValue && Array.isArray(nodeValue.value), "Malformed list tree");
-    
-            const arrValue = nodeValue.value.reduce((arr : string[], childNode : ParserResult) => {
-                arr.push(
-                    // Reduce children to strings
-                    childNode.source.substring(childNode.indexStart, childNode.indexEnd)
-                );
-                return arr;
-            }, []);
-    
-            mKeyValue.set(propName, arrValue);
 
+        if ('error' in nodeName || 'error' in nodeValue) continue;
+
+        function getStringFromParseResult( node : ParserResult ) {
+            return node.source.substring(node.indexStart, node.indexEnd);
         }
 
-    });
+        const propName = getStringFromParseResult(nodeName);
+
+        // The value could be an array of strings, or just a string, so handle both cases
+        const propValue = (! Array.isArray(nodeValue.value)) 
+            ? getStringFromParseResult(nodeValue)
+            : Array
+                .from(nodeValue.value as ParserResult[])
+                .reduce<string[]>((arr : string[], childNode : ParserResult) => {
+                    arr.push(getStringFromParseResult(childNode));
+                    return arr;
+                }, []);
+
+        // Lock in the value for this property
+        mKeyValue.set(propName, propValue);
+
+    }
 
     // 3. Return the results!
 
@@ -299,11 +277,18 @@ Deno.test({
         const expect = new Map();
         expect.set('title', 'hello');
 
-        const actual = parse('---\ntitle: hello\n---\n');
+        const actual = parse(
+            '---\ntitle: hello\n---\n',
+            [{
+                property: 'title',
+                type: PropertyKind.Line,
+                defaultsTo: ''
+            }]
+        );
 
         if (actual instanceof Error) throw actual;
 
         assertEquals(expect, actual.props);
-
+console.log(actual.props)
     }
 })
