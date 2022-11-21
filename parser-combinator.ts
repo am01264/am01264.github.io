@@ -30,7 +30,7 @@ interface ParserError<T, A extends ParseSource<T>> extends ParserResultCommon<T,
 }
 
 interface ParserSuccess<T, A extends ParseSource<T>> extends ParserResultCommon<T, A> {
-    value?: T | ParserResult<T,A>[] | A;
+    value: T | ParserResult<T,A>[] | A | undefined;
 }
 
 export type ParserResult<T = string, A extends ParseSource<T> = string> = ParserSuccess<T, A> | ParserError<T, A>;
