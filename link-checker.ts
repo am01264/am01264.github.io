@@ -175,6 +175,11 @@ function parseLinksFromMarkdown( markdown : string ) {
         // Starting parse at ix, fast-forward to first possible link character
         while (ix < markdown.length && markdown[ix] !== "[") { ix++ }
         
+        if (ix > 0 && markdown[ix - 1] === "!") {
+            // If a link is preceded by !, then it's a markdown image, not link
+            continue;
+        }
+
         if (ix >= markdown.length) {
             // Reached end of document.
             break;
