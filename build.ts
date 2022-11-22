@@ -1,5 +1,5 @@
 import {parse, PropertyKind} from "./front-matter-parser.ts"
-import {checkLinks} from "./link-checker.ts";
+import {checkLinks, parseLinksFromMarkdown} from "./link-checker.ts";
 
 const dirBase = "./_posts";
 const files = [];
@@ -97,12 +97,16 @@ for (const file of files) {
 
     const markdown = szDocument.substring(frontMatterLength);
 
-    checkLinks(markdown, {
-        abortOnFirstFail: true,
-        baseURL: baseURL,
-        redirectsAllowed: false,
-        timeout: 5000
-    });
+    const links = parseLinksFromMarkdown(markdown);
+
+    console.log(links)
+
+    // checkLinks(links, {
+    //     abortOnFirstFail: true,
+    //     baseURL: baseURL,
+    //     redirectsAllowed: false,
+    //     timeout: 5000
+    // });
     
 }
 

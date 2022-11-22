@@ -164,7 +164,7 @@ Deno.test({
 })
 
 
-function parseLinksFromMarkdown( markdown : string ) {
+export function parseLinksFromMarkdown( markdown : string ): string[] {
 
     const linkParser = anyOf(inlineLink, linkLabel);
 
@@ -206,6 +206,10 @@ function parseLinksFromMarkdown( markdown : string ) {
             if (typeof node !== "object") return AdjustWalk.StopDescent;
             if ('error' in node) return AdjustWalk.StopDescent;
             
+            if (node.author === linkText) {
+                console.log(`Found Link Text: ${node.source.substring(node.indexStart, node.indexEnd)}`)
+            }
+
             if (node.author === linkDestination) {
                 const url = node.source.substring(node.indexStart, node.indexEnd);
                 console.info("Link found: %s", url)
@@ -302,11 +306,10 @@ async function tryLink( l : string, options : TryLinkOptions = { baseURL: undefi
 
 type CheckLinksOptions = TryLinkOptions & { abortOnFirstFail : boolean }
 
-export async function checkLinks( markdown : string, options : Partial<CheckLinksOptions> = { baseURL: "https://andrewmcauley.co.uk/", timeout: 5000, redirectsAllowed: true, abortOnFirstFail: false } ) {
+export async function checkLinks( arrLinks : string[], options : Partial<CheckLinksOptions> = { baseURL: "https://andrewmcauley.co.uk/", timeout: 5000, redirectsAllowed: true, abortOnFirstFail: false } ): Promise<(Error | Response)[]> {
 
     options.timeout = options.timeout || 5000;
 
-    const arrLinks = parseLinksFromMarkdown(markdown);
     const arrResults = [];
 
     for (let ix = 0; ix < arrLinks.length; ix++) {
