@@ -1,6 +1,5 @@
 ---
 layout: page
-title: About
 ---
 
 Hey &mdash;
@@ -13,7 +12,7 @@ This is my personal website - my little island in the sun. It has however, been 
 
 Feel free to peruse the site, but just know each post is of a snapshot in time - a riff on a quick idea bubbling to the surface.
 
-<hr style="margin-top: 5em;"></div>
+<hr style="margin-top: 5em;">
 
 ...and speaking of rifts. Here's a quick credits roll...
 
